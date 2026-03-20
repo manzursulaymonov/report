@@ -146,7 +146,6 @@ const d=mrrData(yr);
 const tot=S.rows.length,clients=[...new Set(S.rows.map(r=>r.Client).filter(Boolean))];
 const done=S.rows.filter(r=>sc(r.status)==='D'),debt=S.rows.filter(r=>sc(r.status)==='Q'),prob=S.rows.filter(r=>sc(r.status)==='P');
 const recent=[...S.rows].filter(r=>r.sanasi).sort((a,b)=>(pd(b.sanasi)||0)-(pd(a.sanasi)||0)).slice(0,8);
-const tDebt=S.rows.filter(r=>sc(r.status)==='Q').sort((a,b)=>b._sUSD-a._sUSD).slice(0,6);
 // Cutoff: for current/future year → up to current month, for past years → full year
 const now=new Date();
 const maxM=yr<now.getFullYear()?11:(yr===now.getFullYear()?now.getMonth():now.getMonth());
@@ -182,8 +181,8 @@ return`<div class="page-header"><div><div class="page-title">Dashboard</div><div
 <div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--teal)"></span>Mijozlar — yangi / churn — ${yr}</span></div><div class="card-body"><div class="chart-wrap"><canvas id="chClients"></canvas></div></div></div>
 </div>
 
-<div class="grid-2"><div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--green)"></span>Status taqsimoti</span></div><div class="card-body"><div class="chart-wrap" style="height:220px"><canvas id="chS"></canvas></div></div></div>
-<div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--red)"></span>Eng katta qarzlar</span></div><div class="card-body" style="padding:0"><table><thead><tr><th>Mijoz</th><th>Firma</th><th class="text-r">Summa $</th><th>Status</th></tr></thead><tbody>${tDebt.map(r=>`<tr><td style="font-weight:500">${r.Client||'—'}</td><td style="color:var(--text2);font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis">${r['Firma nomi']||'—'}</td><td class="text-r mono">${fmt(r._sUSD)}</td><td>${sb(r.status)}</td></tr>`).join('')}</tbody></table></div></div></div>
+<div class="grid-2"><div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--green)"></span>Yangi mijozlar — ${yr}</span></div><div class="card-body" style="padding:0;max-height:280px;overflow-y:auto"><table><thead><tr><th>Oy</th><th>Mijoz</th><th class="text-r">MRR $</th></tr></thead><tbody>${(()=>{const rows=[];for(let m=maxM;m>=0;m--){const names=d.newNames[m]||[];names.forEach(n=>{const c=d.clients.find(x=>x.name===n);rows.push('<tr><td class="mono" style="font-size:11px;color:var(--text3)">'+mos[m]+'</td><td style="font-weight:500">'+n+'</td><td class="text-r mono" style="color:var(--green)">+'+(c?fmt(c.monthly[m]):'—')+'</td></tr>')})}return rows.length?rows.join(''):'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:20px">Ma\'lumot yo\'q</td></tr>'})()}</tbody></table></div></div>
+<div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--red)"></span>Churn mijozlar — ${yr}</span></div><div class="card-body" style="padding:0;max-height:280px;overflow-y:auto"><table><thead><tr><th>Oy</th><th>Mijoz</th><th class="text-r">Yo'qotilgan $</th></tr></thead><tbody>${(()=>{const rows=[];for(let m=maxM;m>=0;m--){const names=d.churnNames[m]||[];names.forEach(n=>{const c=d.clients.find(x=>x.name===n);const prev=m>0?c?.monthly[m-1]:d.prevDec;const lost=c?(m>0?c.monthly[m-1]:0):0;rows.push('<tr><td class="mono" style="font-size:11px;color:var(--text3)">'+mos[m]+'</td><td style="font-weight:500">'+n+'</td><td class="text-r mono" style="color:var(--red)">-'+(c?fmt(c.monthly[m>0?m-1:0]||0):'—')+'</td></tr>')})}return rows.length?rows.join(''):'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:20px">Ma\'lumot yo\'q</td></tr>'})()}</tbody></table></div></div></div>
 <div class="card" style="margin-top:14px"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--amber)"></span>Oxirgi shartnomalar</span></div><div class="card-body" style="padding:0"><table><thead><tr><th>Mijoz</th><th>Menejer</th><th>Sana</th><th class="text-r">Oylik $</th><th>Status</th></tr></thead><tbody>${recent.map(r=>`<tr><td style="font-weight:500">${r.Client||'—'}</td><td style="color:var(--text2)">${r.Manager||'—'}</td><td class="mono" style="font-size:11px">${r.sanasi}</td><td class="text-r mono">${fmt(r._mUSD)}</td><td>${sb(r.status)}</td></tr>`).join('')}</tbody></table></div></div>`}
 
 // CONTRACTS
@@ -317,8 +316,10 @@ const prevDecCl=new Set();
 clients.forEach(c=>{const pAct=(allC[c.name]||[]).filter(ct=>ct.musd>0&&ct.st<=pdE&&ct.endD>=pdS);if(pAct.length)prevDecCl.add(c.name)});
 const newPM=cSets.map((s,i)=>{const prev=i===0?prevDecCl:cSets[i-1];return[...s].filter(n=>!prev.has(n)).length});
 const churnPM=cSets.map((s,i)=>{const prev=i===0?prevDecCl:cSets[i-1];return[...prev].filter(n=>!s.has(n)).length});
+const newNames=cSets.map((s,i)=>{const prev=i===0?prevDecCl:cSets[i-1];return[...s].filter(n=>!prev.has(n))});
+const churnNames=cSets.map((s,i)=>{const prev=i===0?prevDecCl:cSets[i-1];return[...prev].filter(n=>!s.has(n))});
 const mrrChange=totals.map((v,i)=>{const prev=i===0?prevDec:totals[i-1];return v-prev});
-return{clients,totals,mom,year,cpm,newPM,churnPM,mrrChange,prevDec};
+return{clients,totals,mom,year,cpm,newPM,churnPM,newNames,churnNames,mrrChange,prevDec};
 }
 
 function rMRR(){
@@ -415,7 +416,7 @@ const eCl=document.getElementById('chClients');if(eCl){const d=mrrData(S.dashYea
 {label:'Jami',data:d.cpm.slice(0,_mx+1),type:'line',borderColor:'#1746a2',borderWidth:2,pointRadius:3,pointBackgroundColor:'#1746a2',tension:0.3,yAxisID:'y1'}
 ]},options:{...bo,plugins:{legend:{display:true,labels:{boxWidth:10,padding:12,font:{size:11}}}},scales:{x:{grid:{display:false},ticks:{color:tc,font:{size:11}}},y:{grid:{color:gc},ticks:{color:tc,font:{size:11}}},y1:{position:'right',grid:{display:false},ticks:{color:'#1746a2',font:{size:11}}}}}})}
 
-const e3=document.getElementById('chS');if(e3){const m={};const lb={A:'Aktiv',D:'Bajarildi',Q:'Eski qarz',P:'Muammo',O:'Ortiqcha',X:'Bekor',B:'Boshqa','?':'Noma\'lum'};S.rows.forEach(r=>{const c=sc(r.status);m[lb[c]||c]=(m[lb[c]||c]||0)+1});const e=Object.entries(m).sort((a,b)=>b[1]-a[1]);new Chart(e3,{type:'doughnut',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:['#117a52','#1746a2','#a36207','#c42b1c','#6941b8','#888','#bbb','#ddd'],borderWidth:0}]},options:{...bo,cutout:'65%',plugins:{legend:{display:true,position:'right',labels:{boxWidth:10,padding:8,font:{size:11}}}}}})}
+// Status chart removed — replaced with new/churn tables
 
 const e4=document.getElementById('chMM');if(e4){const m={};S.rows.forEach(r=>{const n=r.Manager||'?';m[n]=(m[n]||0)+r._mUSD});const e=Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10);new Chart(e4,{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:co,borderRadius:4}]},options:{...bo,indexAxis:'y',scales:{x:{grid:{color:gc},ticks:{color:tc,font:{size:11},callback:v=>fk(v)}},y:{grid:{display:false},ticks:{color:tc,font:{size:11}}}}}})}
 
