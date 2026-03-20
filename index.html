@@ -392,6 +392,7 @@ Object.entries(allCts).forEach(([name,cts])=>{
   const startM=minSt.getMonth();
   // Calculate expected for every month from startY/startM through year/Dec
   let cumTotal=0;
+  let preYear=0;
   const cum12=new Array(12).fill(0);// for displayed year only
   for(let y=startY;y<=year;y++){
     const m0=(y===startY?startM:0);
@@ -420,8 +421,9 @@ Object.entries(allCts).forEach(([name,cts])=>{
       cumTotal+=monthExp;
       if(y===year)cum12[m]=Math.round(cumTotal);
     }
+    if(y===year-1)preYear=Math.round(cumTotal);
   }
-  result[name]=cum12;
+  result[name]={cum:cum12,preYear};
 });
 return result;
 }
@@ -490,7 +492,7 @@ ${c.monthly.map((v,m)=>{
 if(!v)return'<td class="mcell mcell-0">—</td>';
 let cls='mcell',tip='';
 if(ce){
-  const cur=ce[m]||0;const prev=m>0?(ce[m-1]||0):0;
+  const cur=ce.cum[m]||0;const prev=m>0?(ce.cum[m-1]||0):ce.preYear;
   if(cur>0){
     if(paid>=cur){cls='mcell mcell-g'}
     else if(paid>prev){
