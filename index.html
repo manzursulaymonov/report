@@ -499,7 +499,7 @@ if(ce){
   if(cur>0){
     const remaining=Math.round(cur-paid);
     const paidThisMonth=Math.round(paid-prev);
-    if(Math.abs(remaining)<=1){cls='mcell mcell-g'}
+    if(remaining<=1){cls='mcell mcell-g'}
     else if(paidThisMonth>0){
       cls='mcell mcell-y';
       tip=` data-tip="to'landi: ${fmt(paidThisMonth)} · qoldi: ${fmt(remaining)}"`
