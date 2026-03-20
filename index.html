@@ -95,7 +95,7 @@ select.flt{padding:8px 28px 8px 10px;border:1px solid var(--border);border-radiu
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script>
-const S={url:localStorage.getItem('uysot_url')||'',rows:[],qRows:[],sec:'dashboard',cP:0,cN:40,cQ:'',cS:'',cM:'',cR:'',mP:0,mN:40,mQ:'',clP:0,clN:40,clQ:'',mrrP:0,mrrQ:'',mrrYear:2026,dashYear:2026};
+const S={rows:[],qRows:[],config:null,sec:'dashboard',cP:0,cN:40,cQ:'',cS:'',cM:'',cR:'',mP:0,mN:40,mQ:'',clP:0,clN:40,clQ:'',mrrP:0,mrrQ:'',mrrYear:2026,dashYear:2026};
 function pn(s){return parseFloat((s||'').replace(/\s/g,'').replace(/,/g,''))||0}
 function fmt(n){return n?Math.round(n).toLocaleString('en-US').replace(/,/g,' '):'—'}
 function fk(n){return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1000?Math.round(n/1000)+'k':Math.round(n)}
@@ -138,7 +138,7 @@ return`<div class="page-header"><div><div class="page-title">Dashboard</div><div
 <option value="2024"${yr===2024?' selected':''}>2024</option>
 <option value="2025"${yr===2025?' selected':''}>2025</option>
 <option value="2026"${yr===2026?' selected':''}>2026</option>
-</select><button class="btn" onclick="loadData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>Yangilash</button></div></div>
+</select><button class="btn" onclick="if(S.config)loadFromConfig(S.config);else showConfig()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>Yangilash</button></div></div>
 <div class="metrics"><div class="metric c1"><div class="metric-lbl">Aktiv mijozlar (${mos[maxM]})</div><div class="metric-val">${curClients}</div><div class="metric-foot">joriy oy</div></div>
 <div class="metric c2"><div class="metric-lbl">Yangi qo'shilgan</div><div class="metric-val">${totalNew}</div><div class="metric-foot"><span class="up">+${totalNew}</span> ${periodLabel}</div></div>
 <div class="metric c4"><div class="metric-lbl">Chiqib ketgan</div><div class="metric-val">${totalChurn}</div><div class="metric-foot"><span class="dn">${totalChurn>0?'-':''}${totalChurn}</span> ${periodLabel}</div></div>
@@ -395,82 +395,79 @@ function pd(s){if(!s)return null;let p=s.split('.');if(p.length===3)return new D
 // NAV
 document.querySelectorAll('.nav-item').forEach(el=>el.addEventListener('click',()=>{document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));el.classList.add('active');S.sec=el.dataset.sec;render()}));
 
-// CONFIG
-function showConfig(){const o=document.createElement('div');o.className='overlay';o.onclick=e=>{if(e.target===o)o.remove()};o.innerHTML=`<div class="modal"><h2>Google Sheets ulanish</h2><div class="sub">Bitta havola — ikkala sheet avtomatik yuklanadi</div>
-<label>Google Sheets havolasi</label>
-<input type="text" id="cfgU" value="${S.url}" placeholder="https://docs.google.com/spreadsheets/d/...">
-<div class="help"><b>Qanday qilish:</b><br>1. Google Sheets → <b>File → Share → Publish to web</b> → <b>Entire document</b> → <b>Publish</b><br>2. Yoki shunchaki brauzer URL'ini nusxalang<br><br>Ichidagi <b>shartnomalar</b> va <b>qoshimcha</b> sheet'lar avtomatik aniqlanadi.<br><br><span style="color:var(--amber)">⚠ Agar havola ishlamasa</span> — CSV fayllarni qo'lda yuklang.</div>
-<div class="modal-btns">
-<button class="btn" onclick="this.closest('.overlay').remove()">Bekor</button>
-<label class="btn" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Shartnomalar CSV<input type="file" accept=".csv" onchange="loadFile(this,'main')" style="display:none"></label>
-<label class="btn" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 5v14M5 12h14"/></svg>Qo'shimcha CSV<input type="file" accept=".csv" onchange="loadFile(this,'extra')" style="display:none"></label>
-<button class="btn btn-primary" onclick="saveCfg()">Saqlash va yuklash</button>
-</div></div>`;document.body.appendChild(o)}
-function saveCfg(){
-const u=document.getElementById('cfgU').value.trim();
-if(!u&&!S.rows.length)return;
-if(u){S.url=u;localStorage.setItem('uysot_url',u)}
-document.querySelector('.overlay')?.remove();loadData()}
+// CONFIG — JSON file based
+function showConfig(){const o=document.createElement('div');o.className='overlay';o.onclick=e=>{if(e.target===o)o.remove()};o.innerHTML=`<div class="modal"><h2>Ma'lumot yuklash</h2><div class="sub">JSON config file yoki CSV fayllar yuklang</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<label class="btn btn-primary" style="cursor:pointer;justify-content:center;padding:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>JSON config yuklash (uysot_config.json)<input type="file" accept=".json" onchange="loadJsonConfig(this)" style="display:none"></label>
+<div style="text-align:center;color:var(--text3);font-size:12px">— yoki alohida CSV fayllar —</div>
+<div style="display:flex;gap:8px">
+<label class="btn" style="cursor:pointer;flex:1;justify-content:center">Shartnomalar CSV<input type="file" accept=".csv" onchange="loadFile(this,'main')" style="display:none"></label>
+<label class="btn" style="cursor:pointer;flex:1;justify-content:center">Qo'shimcha CSV<input type="file" accept=".csv" onchange="loadFile(this,'extra')" style="display:none"></label>
+</div>
+</div>
+<div class="help" style="margin-top:14px"><b>JSON config formati:</b><br><code style="font-size:10.5px;display:block;background:var(--bg3);padding:8px;border-radius:4px;margin-top:4px;line-height:1.6">{<br>&nbsp;&nbsp;"shartnomalar": "https://...pub?gid=...&output=csv",<br>&nbsp;&nbsp;"qoshimcha": "https://...pub?gid=...&output=csv"<br>}</code><br>Linklar Google Sheets → <b>Publish to web</b> → har bir sheet uchun <b>CSV</b> formatida olinadi.</div>
+<div class="modal-btns"><button class="btn" onclick="this.closest('.overlay').remove()">Yopish</button></div>
+</div>`;document.body.appendChild(o)}
 
-// DATA — JSONP (bypasses CORS, works from file://)
-function getSpreadsheetId(u){let m;if(m=u.match(/spreadsheets\/d\/e\/([\w-]+)/))return{id:m[1],pub:true};if(m=u.match(/spreadsheets\/d\/([\w-]+)/))return{id:m[1],pub:false};return null}
-function gvizUrl(baseUrl,sheetName){const info=getSpreadsheetId(baseUrl);if(!info)return null;const base=info.pub?`https://docs.google.com/spreadsheets/d/e/${info.id}/gviz/tq`:`https://docs.google.com/spreadsheets/d/${info.id}/gviz/tq`;return`${base}?tqx=responseHandler:CB&sheet=${encodeURIComponent(sheetName)}`}
-function gvizToRows(table){const cols=table.cols.map(c=>c.label||c.id);return table.rows.map(r=>{const o={};r.c.forEach((cell,i)=>{let v='';if(cell){if(cell.f)v=String(cell.f);else if(cell.v!=null)v=String(cell.v)}o[cols[i]]=v.trim()});o._mUSD=pn(o['Oylik USD']);o._mUZS=pn(o['oylik UZS']);o._sUSD=pn(o['sum USD']);o._sUZS=pn(o['sum UZS']);o._tUSD=pn(o['Tadbiq USD']);o._dur=parseFloat(o['muddati (oy)'])||0;return o}).filter(r=>r.Client||r['Firma nomi'])}
-function loadJsonp(url,label){return new Promise((res,rej)=>{
-const cb='_g'+Math.random().toString(36).slice(2);
-const realUrl=url.replace('responseHandler:CB','responseHandler:'+cb);
-console.log(`[${label}] Yuklanmoqda: ${realUrl}`);
-const t=setTimeout(()=>{delete window[cb];rej(new Error(`[${label}] 12s kutildi, javob kelmadi.\nURL: ${realUrl}\n\nSabablar:\n1) Google Sheets "Publish to web" qilinmagan\n2) Sheet nomi noto'g'ri ("shartnomalar" / "qoshimcha")\n3) Internet aloqasi yo'q`))},12000);
-window[cb]=function(resp){
-clearTimeout(t);delete window[cb];
-console.log(`[${label}] Javob keldi:`,resp.status,resp.table?.rows?.length+' qator');
-if(resp.status==='error'){
-  const msg=resp.errors?.map(e=>e.detailed_message||e.message).join('; ')||'Noma\'lum xatolik';
-  return rej(new Error(`[${label}] Google Sheets xatolik: ${msg}\n\nSheet nomi: "${realUrl.match(/sheet=([^&]*)/)?.[1]||'?'}"`));
-}
-try{const rows=gvizToRows(resp.table);console.log(`[${label}] ${rows.length} ta qator yuklandi`);res(rows)}
-catch(e){rej(new Error(`[${label}] Ma'lumot parse xatolik: ${e.message}`))}
-};
-const s=document.createElement('script');
-s.src=realUrl;
-s.onerror=(ev)=>{clearTimeout(t);delete window[cb];
-rej(new Error(`[${label}] Script yuklanmadi.\nURL: ${realUrl}\n\nSabablar:\n1) Google Sheets "Publish to web" qilinmagan\n2) Havola noto'g'ri\n3) Internet aloqasi yo'q`))};
-document.head.appendChild(s);
-s.onload=()=>{s.remove();console.log(`[${label}] Script yuklandi, callback kutilmoqda...`)}
-})}
-async function loadData(){if(!S.url&&!S.rows.length){showConfig();return}
-const info=getSpreadsheetId(S.url);
-if(!info){
-document.getElementById('root').innerHTML=errPage('Havola formatini tanib bo\'lmadi','Kiritilgan URL: <code style="word-break:break-all;font-size:11px;background:var(--bg3);padding:2px 6px;border-radius:3px">'+S.url+'</code><br><br>Quyidagi formatlardan biri kutiladi:<br>• https://docs.google.com/spreadsheets/d/<b>SPREADSHEET_ID</b>/...<br>• https://docs.google.com/spreadsheets/d/e/<b>PUBLISHED_ID</b>/...');
-return}
-document.getElementById('root').innerHTML='<div class="loading"><div class="spin"></div><div style="color:var(--text2);font-size:13px">Yuklanmoqda...<br><span style="font-size:11px;color:var(--text3)">ID: '+info.id.slice(0,20)+'...</span></div></div>';
+// DATA — JSON config + CSV fetch
+async function fetchCsv(url,label){
+console.log('['+label+'] Yuklanmoqda: '+url);
+// Method 1: allorigins.win /get (JSON wrapper — works from file://)
 try{
-const u1=gvizUrl(S.url,'shartnomalar');
-const u2=gvizUrl(S.url,'qoshimcha');
-console.log('Shartnomalar URL:',u1);console.log('Qo\'shimcha URL:',u2);
-if(u1)S.rows=await loadJsonp(u1,'Shartnomalar');
-if(u2)try{S.qRows=await loadJsonp(u2,'Qo\'shimcha')}catch(e){console.warn(e.message);S.qRows=[]}
-document.getElementById('upd').textContent=new Date().toLocaleTimeString('uz');render()
+const r=await fetch('https://api.allorigins.win/get?url='+encodeURIComponent(url));
+if(r.ok){const j=await r.json();if(j.contents){console.log('['+label+'] allorigins/get: OK');return j.contents}}
+}catch(e){console.warn('['+label+'] allorigins/get:',e.message)}
+// Method 2: direct fetch (works if hosted on web server)
+try{const r=await fetch(url);if(r.ok){const t=await r.text();console.log('['+label+'] Direct: OK');return t}}catch(e){console.warn('['+label+'] Direct:',e.message)}
+// Method 3: corsproxy
+try{const r=await fetch('https://corsproxy.io/?'+encodeURIComponent(url));if(r.ok){const t=await r.text();console.log('['+label+'] corsproxy: OK');return t}}catch(e){console.warn('['+label+'] corsproxy:',e.message)}
+throw new Error('['+label+'] Yuklab bo\'lmadi.\nCSV faylni qo\'lda yuklang.')}
+
+async function loadFromConfig(config){
+document.getElementById('root').innerHTML='<div class="loading"><div class="spin"></div><div style="color:var(--text2);font-size:13px">Ma\'lumotlar yuklanmoqda...</div></div>';
+try{
+if(config.shartnomalar){const csv=await fetchCsv(config.shartnomalar,'Shartnomalar');S.rows=parse(csv);console.log('[Shartnomalar] '+S.rows.length+' ta qator')}
+if(config.qoshimcha){try{const csv=await fetchCsv(config.qoshimcha,'Qo\'shimcha');S.qRows=parse(csv);console.log('[Qo\'shimcha] '+S.qRows.length+' ta qator')}catch(e){console.warn(e.message);S.qRows=[]}}
+document.getElementById('upd').textContent=new Date().toLocaleTimeString('uz');
+document.querySelector('.overlay')?.remove();
+render()
 }catch(e){
-console.error('loadData xatolik:',e);
-document.getElementById('root').innerHTML=errPage('Yuklanmadi',e.message.replace(/\n/g,'<br>'))}}
+console.error('Xatolik:',e);
+document.getElementById('root').innerHTML=errPage('Yuklanmadi',e.message.replace(/\n/g,'<br>')+'<br><br>CSV fayllarni qo\'lda yuklang (Sozlamalar → CSV tugmalari)')}}
+
+function loadJsonConfig(input){const f=input.files[0];if(!f)return;
+const r=new FileReader();r.onload=e=>{try{
+const config=JSON.parse(e.target.result);
+if(!config.shartnomalar)throw new Error('"shartnomalar" havolasi topilmadi');
+// Save config to localStorage
+localStorage.setItem('uysot_config',e.target.result);
+S.config=config;
+loadFromConfig(config);
+}catch(e){alert('JSON xatolik: '+e.message)}};r.readAsText(f)}
+
 function errPage(title,detail){return`<div class="loading" style="gap:12px">
 <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
 <div style="font-weight:600;color:var(--red);font-size:16px">${title}</div>
 <div style="color:var(--text2);font-size:12px;text-align:left;max-width:520px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px;line-height:1.7">${detail}</div>
 <div style="display:flex;gap:6px;margin-top:4px">
-<label class="btn btn-primary" style="cursor:pointer">Shartnomalar CSV<input type="file" accept=".csv" onchange="loadFile(this,'main')" style="display:none"></label>
+<label class="btn btn-primary" style="cursor:pointer">JSON config<input type="file" accept=".json" onchange="loadJsonConfig(this)" style="display:none"></label>
+<label class="btn" style="cursor:pointer">Shartnomalar CSV<input type="file" accept=".csv" onchange="loadFile(this,'main')" style="display:none"></label>
 <label class="btn" style="cursor:pointer">Qo'shimcha CSV<input type="file" accept=".csv" onchange="loadFile(this,'extra')" style="display:none"></label>
 </div>
-<button class="btn" onclick="showConfig()">Havolani o'zgartirish</button>
+<button class="btn" onclick="showConfig()">Sozlamalar</button>
 </div>`}
 function loadFile(i,type){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{try{
 if(type==='extra'){S.qRows=parse(e.target.result);alert('Qo\'shimcha kelishuvlar yuklandi: '+S.qRows.length+' ta')}
 else{S.rows=parse(e.target.result)}
 document.querySelector('.overlay')?.remove();document.getElementById('upd').textContent=new Date().toLocaleTimeString('uz');render()}catch(e){alert('Xatolik: '+e.message)}};r.readAsText(f)}
-function showWelcome(){document.getElementById('root').innerHTML=`<div class="loading"><div class="logo-mark" style="width:52px;height:52px;font-size:20px;border-radius:12px">U</div><h2 style="font-size:20px;font-weight:700;margin-top:4px">UYSOT Shartnomalar</h2><p style="color:var(--text2);text-align:center;max-width:400px;font-size:13px">Google Sheets jadvalini database sifatida ulab, barcha ma'lumotlarni real-time ko'ring</p><div style="display:flex;gap:10px;margin-top:12px"><button class="btn btn-primary" onclick="showConfig()" style="padding:10px 22px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>Google Sheets ulash</button><label class="btn" style="padding:10px 22px;cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>CSV yuklash<input type="file" accept=".csv" onchange="loadFile(this,'main')" style="display:none"></label></div></div>`}
+function showWelcome(){document.getElementById('root').innerHTML=`<div class="loading"><div class="logo-mark" style="width:52px;height:52px;font-size:20px;border-radius:12px">U</div><h2 style="font-size:20px;font-weight:700;margin-top:4px">UYSOT Shartnomalar</h2><p style="color:var(--text2);text-align:center;max-width:400px;font-size:13px;line-height:1.7">Google Sheets ma'lumotlarini <b>uysot_config.json</b> file orqali ulang.<br>JSON ichida shartnomalar va qo'shimcha CSV havolalari bo'ladi.</p><div style="display:flex;gap:10px;margin-top:16px"><label class="btn btn-primary" style="padding:10px 22px;cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>JSON config yuklash<input type="file" accept=".json" onchange="loadJsonConfig(this)" style="display:none"></label><button class="btn" onclick="showConfig()" style="padding:10px 22px">Boshqa usullar</button></div></div>`}
 
-if(S.url)loadData();else showWelcome();
+// INIT — check saved config
+(function(){
+const saved=localStorage.getItem('uysot_config');
+if(saved){try{const c=JSON.parse(saved);S.config=c;loadFromConfig(c);return}catch(e){}}
+showWelcome();
+})();
 </script>
 </body>
 </html>
