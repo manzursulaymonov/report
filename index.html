@@ -95,11 +95,43 @@ select.flt{padding:8px 28px 8px 10px;border:1px solid var(--border);border-radiu
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script>
-const S={rows:[],qRows:[],config:null,sec:'dashboard',cP:0,cN:40,cQ:'',cS:'',cM:'',cR:'',mP:0,mN:40,mQ:'',clP:0,clN:40,clQ:'',mrrP:0,mrrQ:'',mrrYear:2026,dashYear:2026};
+const S={rows:[],qRows:[],payRows:[],y2024Rows:[],perevodRows:[],config:null,sec:'dashboard',cP:0,cN:40,cQ:'',cS:'',cM:'',cR:'',mP:0,mN:40,mQ:'',clP:0,clN:40,clQ:'',mrrP:0,mrrQ:'',mrrYear:2026,dashYear:2026};
 function pn(s){return parseFloat((s||'').replace(/\s/g,'').replace(/,/g,''))||0}
 function fmt(n){return n?Math.round(n).toLocaleString('en-US').replace(/,/g,' '):'—'}
 function fk(n){return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1000?Math.round(n/1000)+'k':Math.round(n)}
 function parse(t){const r=Papa.parse(t,{skipEmptyLines:true});const h=r.data[0];console.log('[Parse] Headers:',h?.slice(0,8));console.log('[Parse] Rows:',r.data.length);return r.data.slice(1).map(row=>{const o={};h.forEach((k,i)=>o[k.trim()]=(row[i]||'').trim());o._mUSD=pn(o['Oylik USD']);o._mUZS=pn(o['oylik UZS']);o._sUSD=pn(o['sum USD']);o._sUZS=pn(o['sum UZS']);o._tUSD=pn(o['Tadbiq USD']);o._dur=parseFloat(o['muddati (oy)'])||0;return o}).filter(r=>r.Client||r['Firma nomi'])}
+function parseRaw(t){const r=Papa.parse(t,{skipEmptyLines:true});const h=r.data[0];return r.data.slice(1).map(row=>{const o={};h.forEach((k,i)=>o[k.trim()]=(row[i]||'').trim());return o})}
+// To'lovlarni hisoblash: Client + shartnoma bo'yicha
+function calcPayments(){
+const pm={};// key = "Client|shartnoma" → total USD
+// 1. payments: Client(C col) + shartnoma(F col) → USD(K col)
+S.payRows.forEach(r=>{
+  const c=r.Client?.trim(),sh=r.shartnoma?.trim();
+  if(!c||!sh)return;
+  const k=c+'|'+sh;
+  if(!pm[k])pm[k]={client:c,shartnoma:sh,pay:0,y24:0,per:0};
+  pm[k].pay+=pn(r.USD);
+});
+// 2. 2024: Client(A col) + shartnoma(D col) → USD(G col)
+S.y2024Rows.forEach(r=>{
+  const c=r.Client?.trim(),sh=r.shartnoma?.trim();
+  if(!c||!sh)return;
+  const k=c+'|'+sh;
+  if(!pm[k])pm[k]={client:c,shartnoma:sh,pay:0,y24:0,per:0};
+  pm[k].y24+=pn(r.USD);
+});
+// 3. perevod: Client(B col) + shartnoma(C col) → Tolov(usd)(F col)
+S.perevodRows.forEach(r=>{
+  const c=r.Client?.trim(),sh=r.shartnoma?.trim();
+  if(!c||!sh)return;
+  const k=c+'|'+sh;
+  if(!pm[k])pm[k]={client:c,shartnoma:sh,pay:0,y24:0,per:0};
+  pm[k].per+=pn(r['Tolov(usd)']);
+});
+// Total
+Object.values(pm).forEach(v=>v.total=v.pay+v.y24+v.per);
+return pm;
+}
 function sc(s){if(!s)return'?';const l=s.toLowerCase();if(l.includes('active')||l==='yangi')return'A';if(l.includes('bajarildi'))return'D';if(l.includes('muammo')||l.includes('katta'))return'P';if(l.includes('eski qarz')||l.includes('tolov qilmagan'))return'Q';if(l.includes('ortiqcha'))return'O';if(l.includes('tugatildi')||l.includes('bekor'))return'X';return'B'}
 function sb(s){const c=sc(s);const m={A:'b-green',D:'b-blue',P:'b-red',Q:'b-amber',O:'b-purple',X:'b-gray',B:'b-gray','?':'b-gray'};return`<span class="badge ${m[c]}">${s||'—'}</span>`}
 function activeR(){return S.rows.filter(r=>sc(r.status)==='A')}
@@ -156,17 +188,23 @@ return`<div class="page-header"><div><div class="page-title">Dashboard</div><div
 
 // CONTRACTS
 function rC(){
+const pm=calcPayments();
 let d=[...S.rows];
 if(S.cQ){const q=S.cQ.toLowerCase();d=d.filter(r=>(r.Client||'').toLowerCase().includes(q)||(r['Firma nomi']||'').toLowerCase().includes(q)||(r.INN||'').includes(q))}
 if(S.cS)d=d.filter(r=>sc(r.status)===S.cS);if(S.cM)d=d.filter(r=>r.Manager===S.cM);if(S.cR)d=d.filter(r=>r.Hudud===S.cR);
 const t=d.length,pg=Math.ceil(t/S.cN),sl=d.slice(S.cP*S.cN,(S.cP+1)*S.cN);
 const so=[{v:'',l:'Barcha'},{v:'A',l:'Aktiv'},{v:'D',l:'Bajarildi'},{v:'Q',l:'Eski qarz'},{v:'P',l:'Muammo'},{v:'O',l:'Ortiqcha'},{v:'X',l:'Bekor'}];
+const hasPay=S.payRows.length||S.y2024Rows.length||S.perevodRows.length;
 return`<div class="page-header"><div><div class="page-title">Shartnomalar</div><div class="page-sub">${t} ta</div></div></div>
 <div class="toolbar"><div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input placeholder="Mijoz, firma, INN..." value="${S.cQ}" oninput="S.cQ=this.value;S.cP=0;render()"></div>
 <select class="flt" onchange="S.cS=this.value;S.cP=0;render()">${so.map(o=>`<option value="${o.v}"${S.cS===o.v?' selected':''}>${o.l}</option>`).join('')}</select>
 <select class="flt" onchange="S.cM=this.value;S.cP=0;render()"><option value="">Barcha menejerlar</option>${uq('Manager').map(m=>`<option value="${m}"${S.cM===m?' selected':''}>${m}</option>`).join('')}</select>
 <select class="flt" onchange="S.cR=this.value;S.cP=0;render()"><option value="">Barcha hududlar</option>${uq('Hudud').map(r=>`<option value="${r}"${S.cR===r?' selected':''}>${r}</option>`).join('')}</select></div>
-<div class="tbl-wrap"><div class="tbl-scroll"><table><thead><tr><th>№</th><th>Mijoz</th><th>Firma</th><th>Hudud</th><th>Menejer</th><th>Sana</th><th>Tugash</th><th class="text-r">Oylik $</th><th class="text-r">Jami $</th><th>Status</th></tr></thead><tbody>${sl.map(r=>`<tr><td class="mono" style="font-size:10px;color:var(--text3)">${r.raqami||'—'}</td><td style="font-weight:600">${r.Client||'—'}</td><td style="color:var(--text2);font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis">${r['Firma nomi']||'—'}</td><td style="font-size:11px">${r.Hudud||'—'}</td><td style="font-size:12px">${r.Manager||'—'}</td><td class="mono" style="font-size:10.5px">${r.sanasi||'—'}</td><td class="mono" style="font-size:10.5px">${r['amal qilishi']||'—'}</td><td class="text-r mono">${fmt(r._mUSD)}</td><td class="text-r mono">${fmt(r._sUSD)}</td><td>${sb(r.status)}</td></tr>`).join('')}</tbody></table></div></div>${pag(S.cP,pg,t,S.cN,'cP')}`}
+<div class="tbl-wrap"><div class="tbl-scroll"><table><thead><tr><th>№</th><th>Mijoz</th><th>Firma</th><th>Hudud</th><th>Menejer</th><th>Sana</th><th>Tugash</th><th class="text-r">Oylik $</th><th class="text-r">Jami $</th>${hasPay?'<th class="text-r">To\'langan</th><th class="text-r">Qarz</th>':''}<th>Status</th></tr></thead><tbody>${sl.map(r=>{
+const k=r.Client+'|'+r.raqami;
+const p=pm[k]||{total:0};
+const qarz=r._sUSD-p.total;
+return`<tr><td class="mono" style="font-size:10px;color:var(--text3)">${r.raqami||'—'}</td><td style="font-weight:600">${r.Client||'—'}</td><td style="color:var(--text2);font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis">${r['Firma nomi']||'—'}</td><td style="font-size:11px">${r.Hudud||'—'}</td><td style="font-size:12px">${r.Manager||'—'}</td><td class="mono" style="font-size:10.5px">${r.sanasi||'—'}</td><td class="mono" style="font-size:10.5px">${r['amal qilishi']||'—'}</td><td class="text-r mono">${fmt(r._mUSD)}</td><td class="text-r mono">${fmt(r._sUSD)}</td>${hasPay?`<td class="text-r mono" style="color:var(--green)">${p.total?fmt(p.total):'—'}</td><td class="text-r mono" style="color:${qarz>0?'var(--red)':qarz<0?'var(--amber)':'var(--green)'};font-weight:${qarz>0?'600':'400'}">${r._sUSD?fmt(qarz):'—'}</td>`:''}<td>${sb(r.status)}</td></tr>`}).join('')}</tbody></table></div></div>${pag(S.cP,pg,t,S.cN,'cP')}`}
 
 // MRR TABLE — computed from Shartnomalar contracts
 function mrrData(year){
@@ -430,6 +468,10 @@ document.getElementById('root').innerHTML='<div class="loading"><div class="spin
 try{
 if(config.shartnomalar){const csv=await fetchCsv(config.shartnomalar,'Shartnomalar');S.rows=parse(csv);console.log('[Shartnomalar] '+S.rows.length+' ta qator')}
 if(config.qoshimcha){try{const csv=await fetchCsv(config.qoshimcha,'Qo\'shimcha');S.qRows=parse(csv);console.log('[Qo\'shimcha] '+S.qRows.length+' ta qator')}catch(e){console.warn(e.message);S.qRows=[]}}
+// To'lov jadvallari
+if(config.payments&&config.payments!=='HAVOLA_KIRITING'){try{const csv=await fetchCsv(config.payments,'Payments');S.payRows=parseRaw(csv);console.log('[Payments] '+S.payRows.length+' ta qator')}catch(e){console.warn(e.message);S.payRows=[]}}
+if(config['2024']&&config['2024']!=='HAVOLA_KIRITING'){try{const csv=await fetchCsv(config['2024'],'2024');S.y2024Rows=parseRaw(csv);console.log('[2024] '+S.y2024Rows.length+' ta qator')}catch(e){console.warn(e.message);S.y2024Rows=[]}}
+if(config.perevod&&config.perevod!=='HAVOLA_KIRITING'){try{const csv=await fetchCsv(config.perevod,'Perevod');S.perevodRows=parseRaw(csv);console.log('[Perevod] '+S.perevodRows.length+' ta qator')}catch(e){console.warn(e.message);S.perevodRows=[]}}
 document.getElementById('upd').textContent=new Date().toLocaleTimeString('uz');
 document.querySelector('.overlay')?.remove();
 render()
