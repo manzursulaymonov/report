@@ -497,9 +497,9 @@ if(ce){
     if(paid>=cur){cls='mcell mcell-g'}
     else if(paid>prev){
       cls='mcell mcell-y';
-      const owed=cur-paid;
-      const pct=Math.round(paid/cur*100);
-      tip=` data-tip="<b>${c.name}</b> · ${mos[m]} ${yr}&#10;Kutilgan: <b>${fmt(cur)}</b> $&#10;To'langan: <b class='tip-warn'>${fmt(paid)}</b> $ (${pct}%)&#10;Qoldi: <b>${fmt(owed)}</b> $"`
+      const paidThisMonth=paid-prev;
+      const remaining=cur-paid;
+      tip=` data-tip="to'landi: ${fmt(paidThisMonth)} · qoldi: ${fmt(remaining)}"`
     }
   }
 }
