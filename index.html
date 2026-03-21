@@ -101,7 +101,7 @@ const S={rows:[],qRows:[],payRows:[],y2024Rows:[],perevodRows:[],config:null,sec
 function pn(s){return parseFloat((s||'').replace(/[$\s]/g,'').replace(/,/g,''))||0}
 function fmt(n){return n?Math.round(n).toLocaleString('en-US').replace(/,/g,' '):'—'}
 function fk(n){return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1000?Math.round(n/1000)+'k':Math.round(n)}
-function parse(t){const r=Papa.parse(t,{skipEmptyLines:true});const h=r.data[0];console.log('[Parse] Headers:',h?.slice(0,8));console.log('[Parse] Rows:',r.data.length);return r.data.slice(1).map(row=>{const o={};h.forEach((k,i)=>o[k.trim()]=(row[i]||'').trim());o._mUSD=pn(o['Oylik USD']);o._mUZS=pn(o['oylik UZS']);o._sUSD=pn(o['sum USD']);o._sUZS=pn(o['sum UZS']);o._tUSD=pn(o['Tadbiq USD']);o._dur=parseFloat(o['muddati (oy)'])||0;return o}).filter(r=>r.Client||r['Firma nomi'])}
+function parse(t){const r=Papa.parse(t,{skipEmptyLines:true});const h=r.data[0];console.log('[Parse] Headers:',h?.slice(0,8));console.log('[Parse] Rows:',r.data.length);return r.data.slice(1).map(row=>{const o={};h.forEach((k,i)=>o[k.trim()]=(row[i]||'').trim());o._mUSD=pn(o['Oylik USD']);o._mUZS=pn(o['oylik UZS']);o._sUSD=pn(o['sum USD']);o._sUZS=pn(o['sum UZS']);o._tUSD=pn(o['Tadbiq USD']);o._dur=parseFloat(o['muddati (oy)'])||0;o._pre=parseInt(o['Prepayment'])||1;return o}).filter(r=>r.Client||r['Firma nomi'])}
 function parseRaw(t){const r=Papa.parse(t,{skipEmptyLines:true});const h=r.data[0];return r.data.slice(1).map(row=>{const o={};h.forEach((k,i)=>o[k.trim()]=(row[i]||'').trim());return o})}
 // To'lovlarni hisoblash: Client + shartnoma bo'yicha
 function calcPayments(){
@@ -133,6 +133,181 @@ S.perevodRows.forEach(r=>{
 // Total
 Object.values(pm).forEach(v=>v.total=v.pay+v.y24+v.per);
 return pm;
+}
+// Debt table: per-client debt at given report date
+function calcDebtTable(reportDate){
+if(!reportDate)reportDate=new Date();
+// End of report month
+const repMonthEnd=new Date(reportDate.getFullYear(),reportDate.getMonth()+1,0);
+// 1. Total paid per client (raw — NOT minus tadbiq)
+const rawPay={};
+const pm=calcPayments();
+// calcPayments already subtracts tadbiq, so raw = total + tadbiq back
+const tadbiqPerClient={};
+S.rows.forEach(r=>{if(r.Client)tadbiqPerClient[r.Client]=(tadbiqPerClient[r.Client]||0)+r._tUSD});
+S.qRows.forEach(r=>{if(r.Client){const t=pn(r['Tadbiq USD']);if(t)tadbiqPerClient[r.Client]=(tadbiqPerClient[r.Client]||0)+t}});
+const clPay=calcClientPayments();// this is paid - tadbiq
+Object.keys(clPay).forEach(c=>{rawPay[c]=clPay[c]+(tadbiqPerClient[c]||0)});
+// Also include clients that only have payments but no tadbiq calc
+Object.values(pm).forEach(v=>{if(!rawPay[v.client])rawPay[v.client]=v.total});
+
+// 2. Per-client contract data
+const clients={};
+S.rows.forEach(r=>{
+  if(!r.Client||!r.sanasi)return;
+  const st=pd(r.sanasi),en=pd(r['amal qilishi']);
+  if(!st)return;
+  const endD=en||new Date(st.getTime()+(r._dur||12)*30.44*24*3600*1000);
+  const c=r.Client;
+  if(!clients[c])clients[c]={name:c,contracts:[],totalSum:0,firma:r['Firma nomi']||''};
+  clients[c].totalSum+=r._sUSD;
+  if(r._mUSD>0||r._tUSD>0){
+    clients[c].contracts.push({musd:r._mUSD,tUSD:r._tUSD,st,endD,pre:r._pre||1,isMain:true});
+  }
+});
+S.qRows.forEach(r=>{
+  if(!r.Client||!r.sanasi)return;
+  const musd=pn(r['Oylik USD']),tUSD=pn(r['Tadbiq USD']);
+  const st=pd(r.sanasi),en=pd(r['amal qilishi']);
+  if(!st)return;
+  const endD=en||new Date(st.getTime()+(parseFloat(r['muddati (oy)'])||12)*30.44*24*3600*1000);
+  const c=r.Client;
+  if(!clients[c])clients[c]={name:c,contracts:[],totalSum:0,firma:''};
+  // Calculate actual sum with day-based partials
+  if(musd>0){
+    let actualSum=tUSD||0;
+    let d=new Date(st.getFullYear(),st.getMonth(),1);
+    const fmE=new Date(st.getFullYear(),st.getMonth()+1,0);
+    const fmDays=Math.round((fmE-st)/864e5)+1;
+    const on1st=st.getDate()===1;
+    const firstMP=on1st?musd:Math.round(musd*fmDays/fmE.getDate());
+    while(d<=endD){
+      const mE=new Date(d.getFullYear(),d.getMonth()+1,0);
+      const mS=new Date(d);
+      if(st>mE||endD<d){d.setMonth(d.getMonth()+1);continue}
+      const isF=(st.getFullYear()===d.getFullYear()&&st.getMonth()===d.getMonth());
+      const isL=(endD.getFullYear()===d.getFullYear()&&endD.getMonth()===d.getMonth());
+      if(isF&&isL){
+        const days=Math.round((endD-st)/864e5)+1;
+        actualSum+=Math.round(musd*days/mE.getDate());
+      }else if(isF){actualSum+=firstMP}
+      else if(isL){
+        const days=Math.round((endD-mS)/864e5)+1;
+        actualSum+=Math.round(musd*days/mE.getDate());
+      }else{actualSum+=musd}
+      d.setMonth(d.getMonth()+1);
+    }
+    clients[c].totalSum+=actualSum;
+    clients[c].contracts.push({musd,tUSD:tUSD||0,st,endD,pre:1,isMain:false});
+  }
+});
+// Inherit pre: qo'shimcha gets parent shartnoma's pre
+Object.values(clients).forEach(cl=>{
+  const mainCts=cl.contracts.filter(c=>c.isMain&&c.musd>0);
+  if(!mainCts.length)return;
+  const anchor=mainCts.reduce((a,c)=>c.st<a.st?c:a,mainCts[0]);
+  cl.contracts.filter(c=>!c.isMain).forEach(q=>{q.pre=anchor.pre});
+});
+
+// 3. Calculate debts
+const result=[];
+Object.values(clients).forEach(cl=>{
+  const paid=rawPay[cl.name]||0;
+  const qoldiq=Math.round(cl.totalSum-paid);
+  
+  // === OY OXIRI: cumExpected by repMonthEnd ===
+  let cumExp=0;
+  cl.contracts.forEach(ct=>{
+    if(ct.st>repMonthEnd)return;
+    cumExp+=ct.tUSD;
+    if(ct.musd<=0)return;
+    // First month partial (both main and qo'shimcha)
+    const fmE=new Date(ct.st.getFullYear(),ct.st.getMonth()+1,0);
+    const fmDays=Math.round((fmE-ct.st)/864e5)+1;
+    const on1st=ct.st.getDate()===1;
+    const firstMP=on1st?ct.musd:Math.round(ct.musd*fmDays/fmE.getDate());
+    // Last month: main = MRR-first, qo'shimcha = day-based partial
+    let lastMP;
+    if(ct.isMain){
+      lastMP=on1st?ct.musd:(ct.musd-firstMP);
+    }else{
+      const lmS=new Date(ct.endD.getFullYear(),ct.endD.getMonth(),1);
+      const lmE=new Date(ct.endD.getFullYear(),ct.endD.getMonth()+1,0);
+      const lmDays=Math.round((ct.endD-lmS)/864e5)+1;
+      lastMP=Math.round(ct.musd*lmDays/lmE.getDate());
+    }
+    const mEnd=ct.endD<repMonthEnd?ct.endD:repMonthEnd;
+    let d=new Date(ct.st.getFullYear(),ct.st.getMonth(),1);
+    while(d<=mEnd){
+      if(ct.st>new Date(d.getFullYear(),d.getMonth()+1,0)||ct.endD<d){d.setMonth(d.getMonth()+1);continue}
+      const isF=(ct.st.getFullYear()===d.getFullYear()&&ct.st.getMonth()===d.getMonth());
+      const isL=(ct.endD.getFullYear()===d.getFullYear()&&ct.endD.getMonth()===d.getMonth());
+      if(isF&&isL){cumExp+=Math.min(firstMP,lastMP)}
+      else if(isF){cumExp+=firstMP}
+      else if(isL){cumExp+=lastMP}
+      else{cumExp+=ct.musd}
+      d.setMonth(d.getMonth()+1);
+    }
+  });
+  const oyQarz=Math.round(cumExp-paid);
+  
+  // === KELISHUV: block-based, merged with anchor ===
+  const mainCts=cl.contracts.filter(c=>c.isMain&&c.musd>0);
+  const anchor=mainCts.length?mainCts.reduce((a,c)=>c.st<a.st?c:a,mainCts[0]):cl.contracts.find(c=>c.musd>0);
+  let kelExp=0;
+  cl.contracts.forEach(ct=>{kelExp+=ct.tUSD});
+  if(anchor){
+    const anchorPre=anchor.pre||1;
+    const aM0=anchor.st.getFullYear()*12+anchor.st.getMonth();
+    const rM=repMonthEnd.getFullYear()*12+repMonthEnd.getMonth();
+    const blocksDue=Math.floor(Math.max(0,rM-aM0)/anchorPre)+1;
+    const paidThroughM=aM0+blocksDue*anchorPre-1;
+    cl.contracts.forEach(ct=>{
+      if(ct.musd<=0||ct.st>repMonthEnd)return;
+      if(ct.isMain){
+        // Main: effM logic (first+last=1 full MRR)
+        const ctOn1st=ct.st.getDate()===1;
+        const ctCalM=(ct.endD.getFullYear()-ct.st.getFullYear())*12+(ct.endD.getMonth()-ct.st.getMonth())+1;
+        const ctEffM=ctOn1st?ctCalM:Math.max(ctCalM-1,1);
+        const ctM0=ct.st.getFullYear()*12+ct.st.getMonth();
+        const ctM1=ct.endD.getFullYear()*12+ct.endD.getMonth();
+        const dueCalM=Math.max(0,Math.min(ctM1,paidThroughM)-ctM0+1);
+        const dueEffM=dueCalM>=ctCalM?ctEffM:Math.min(dueCalM,ctEffM);
+        kelExp+=ct.musd*dueEffM;
+      }else{
+        // Qo'shimcha: iterate months, day-based partials
+        const ctM0=ct.st.getFullYear()*12+ct.st.getMonth();
+        const ctM1=ct.endD.getFullYear()*12+ct.endD.getMonth();
+        const dueEnd=Math.min(ctM1,paidThroughM);
+        for(let mi=ctM0;mi<=dueEnd;mi++){
+          const y=Math.floor(mi/12),m=mi%12;
+          const mS=new Date(y,m,1),mE=new Date(y,m+1,0);
+          const isF=(mi===ctM0&&ct.st.getDate()!==1);
+          const isL=(mi===ctM1);
+          if(isF&&isL){
+            const days=Math.round((ct.endD-ct.st)/864e5)+1;
+            kelExp+=Math.round(ct.musd*days/mE.getDate());
+          }else if(isF){
+            const days=Math.round((mE-ct.st)/864e5)+1;
+            kelExp+=Math.round(ct.musd*days/mE.getDate());
+          }else if(isL){
+            const days=Math.round((ct.endD-mS)/864e5)+1;
+            kelExp+=Math.round(ct.musd*days/mE.getDate());
+          }else{
+            kelExp+=ct.musd;
+          }
+        }
+      }
+    });
+  }
+  const kelQarz=Math.round(kelExp-paid);
+  
+  if(qoldiq>1||oyQarz>1||kelQarz>1){
+    result.push({name:cl.name,firma:cl.firma,qoldiq,oyQarz,kelQarz,totalSum:Math.round(cl.totalSum),paid:Math.round(paid)});
+  }
+});
+result.sort((a,b)=>b.kelQarz-a.kelQarz);
+return result;
 }
 function sc(s){if(!s)return'?';const l=s.toLowerCase();if(l.includes('active')||l==='yangi')return'A';if(l.includes('bajarildi'))return'D';if(l.includes('muammo')||l.includes('katta'))return'P';if(l.includes('eski qarz')||l.includes('tolov qilmagan'))return'Q';if(l.includes('ortiqcha'))return'O';if(l.includes('tugatildi')||l.includes('bekor'))return'X';return'B'}
 function sb(s){const c=sc(s);const m={A:'b-green',D:'b-blue',P:'b-red',Q:'b-amber',O:'b-purple',X:'b-gray',B:'b-gray','?':'b-gray'};return`<span class="badge ${m[c]}">${s||'—'}</span>`}
@@ -308,7 +483,7 @@ const dr=dashRange();
 const {labels,totals,cpmArr,newPerPt,churnPerPt,addedMRR,lostMRR,newClients,churnClients,expClients}=dr;
 const tot=S.rows.length,clients=[...new Set(S.rows.map(r=>r.Client).filter(Boolean))];
 const recent=[...S.rows].filter(r=>r.sanasi).sort((a,b)=>(pd(b.sanasi)||0)-(pd(a.sanasi)||0)).slice(0,8);
-const tDebt=S.rows.filter(r=>sc(r.status)==='Q').sort((a,b)=>b._sUSD-a._sUSD).slice(0,6);
+const tDebt=calcDebtTable(S.dashTo||new Date()).slice(0,10);
 const curMRR=totals[totals.length-1]||0;
 const startMRR=totals[0]||0;
 const mrrDelta=curMRR-startMRR;
@@ -358,7 +533,7 @@ ${isCust?`<div style="display:flex;gap:4px;align-items:center;margin-left:4px">
 </div>
 
 <div class="grid-2"><div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--green)"></span>Status taqsimoti</span></div><div class="card-body"><div class="chart-wrap" style="height:220px"><canvas id="chS"></canvas></div></div></div>
-<div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--red)"></span>Eng katta qarzlar</span></div><div class="card-body" style="padding:0"><table><thead><tr><th>Mijoz</th><th>Firma</th><th class="text-r">Summa $</th><th>Status</th></tr></thead><tbody>${tDebt.map(r=>`<tr><td style="font-weight:500">${r.Client||'—'}</td><td style="color:var(--text2);font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis">${r['Firma nomi']||'—'}</td><td class="text-r mono">${fmt(r._sUSD)}</td><td>${sb(r.status)}</td></tr>`).join('')}</tbody></table></div></div></div>
+<div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--red)"></span>Qarzdorlik (${lastLabel} oy oxiriga)</span></div><div class="card-body" style="padding:0;max-height:320px;overflow-y:auto"><table><thead><tr><th>Mijoz</th><th>Firma</th><th class="text-r">Sh. qoldiq</th><th class="text-r">Oy oxiri</th><th class="text-r">Kelishuv</th></tr></thead><tbody>${tDebt.length?tDebt.map(r=>'<tr><td style="font-weight:500">'+r.name+'</td><td style="color:var(--text2);font-size:11px;max-width:130px;overflow:hidden;text-overflow:ellipsis">'+(r.firma||'—')+'</td><td class="text-r mono" style="font-size:11px;color:var(--text3)">'+(r.qoldiq>0?fmt(r.qoldiq):'—')+'</td><td class="text-r mono" style="font-size:11px;color:'+(r.oyQarz>0?'var(--amber)':'var(--green)')+';font-weight:'+(r.oyQarz>0?'600':'400')+'">'+(r.oyQarz>0?fmt(r.oyQarz):'—')+'</td><td class="text-r mono" style="font-size:11px;color:'+(r.kelQarz>0?'var(--red)':'var(--green)')+';font-weight:'+(r.kelQarz>0?'700':'400')+'">'+(r.kelQarz>0?fmt(r.kelQarz):'—')+'</td></tr>').join(''):'<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">—</td></tr>'}</tbody></table></div></div></div>
 <div class="card" style="margin-top:14px"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--amber)"></span>Oxirgi shartnomalar</span></div><div class="card-body" style="padding:0"><table><thead><tr><th>Mijoz</th><th>Menejer</th><th>Sana</th><th class="text-r">Oylik $</th><th>Status</th></tr></thead><tbody>${recent.map(r=>`<tr><td style="font-weight:500">${r.Client||'—'}</td><td style="color:var(--text2)">${r.Manager||'—'}</td><td class="mono" style="font-size:11px">${r.sanasi}</td><td class="text-r mono">${fmt(r._mUSD)}</td><td>${sb(r.status)}</td></tr>`).join('')}</tbody></table></div></div>`}
 
 // CONTRACTS
