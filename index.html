@@ -55,7 +55,7 @@ select.flt{padding:8px 28px 8px 10px;border:1px solid var(--border);border-radiu
 .modal h2{font-size:17px;margin-bottom:3px}.modal .sub{color:var(--text2);font-size:12.5px;margin-bottom:18px}
 .modal label{display:block;font-size:12.5px;font-weight:500;margin-bottom:5px;color:var(--text2)}.modal input[type=text]{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:12.5px;font-family:var(--font);margin-bottom:14px}.modal input[type=text]:focus{outline:none;border-color:var(--accent2)}
 .modal .help{font-size:11.5px;color:var(--text3);margin:-8px 0 14px;line-height:1.6}.modal-btns{display:flex;gap:7px;justify-content:flex-end;margin-top:6px}
-@media(max-width:1200px){.metrics{grid-template-columns:repeat(3,1fr)}}@media(max-width:1000px){.grid-2{grid-template-columns:1fr}}@media(max-width:768px){.sidebar{width:0;overflow:hidden}.main{margin-left:0;padding:16px}.metrics{grid-template-columns:1fr 1fr}}
+@media(max-width:1200px){.metrics{grid-template-columns:repeat(3,1fr)}}@media(max-width:1000px){.grid-2{grid-template-columns:1fr}}@media(max-width:768px){.sidebar{width:0;overflow:hidden}.main{margin-left:0;padding:16px}.metrics{grid-template-columns:1fr 1fr}.dash-new-full{overflow-x:auto}.dash-new-full .col-hide{display:none}.dash-churn-exp{grid-template-columns:1fr!important}}
 .mrr-tbl{font-size:11.5px;border-collapse:separate;border-spacing:0;width:100%}
 .mrr-tbl th,.mrr-tbl td{padding:5px 7px;border-bottom:1px solid #edece8;border-right:1px solid #f2f1ed}
 .mrr-tbl thead th{background:#f5f4f0;position:sticky;top:0;z-index:3;font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;text-align:center;white-space:nowrap;border-bottom:2px solid var(--border);color:var(--text3);font-weight:600}
@@ -183,7 +183,7 @@ S.rows.forEach(r=>{
   const st=pd(r.sanasi),en=pd(r['amal qilishi']);
   if(!st)return;
   const endD=en||new Date(st.getTime()+(r._dur||12)*30.44*24*3600*1000);
-  all.push({client:r.Client,musd:r._mUSD||0,st,endD,mgr:r.Manager||''});
+  all.push({client:r.Client,musd:r._mUSD||0,st,endD,mgr:r.Manager||'',hudud:r.Hudud||'',dur:r._dur||0,tUSD:r._tUSD||0,sUSD:r._sUSD||0,izoh:r.izoh||'',raqami:r.raqami||''});
 });
 S.qRows.forEach(r=>{
   if(!r.Client||!r.sanasi)return;
@@ -191,7 +191,7 @@ S.qRows.forEach(r=>{
   const st=pd(r.sanasi),en=pd(r['amal qilishi']);
   if(!st)return;
   const endD=en||new Date(st.getTime()+(parseFloat(r['muddati (oy)'])||12)*30.44*24*3600*1000);
-  qAll.push({client:r.Client,musd,st,endD,mgr:r.Manager||''});
+  qAll.push({client:r.Client,musd,st,endD,mgr:r.Manager||'',hudud:'',dur:0,tUSD:0,sUSD:0,izoh:'',raqami:''});
 });
 return{all,qAll};
 }
@@ -282,17 +282,17 @@ allNames.forEach(name=>{
   const cts=(byClient[name]||[]).filter(c=>c.musd>0);
   const mgr=(cts[cts.length-1]||{}).mgr||'';
   if(mrrS===0&&mrrE>0){
-    // NEW or RECHURN — appeared in period
     const firstEver=cts.length?cts.reduce((a,c)=>c.st<a.st?c:a,cts[0]):null;
     const startedInPeriod=cts.filter(c=>c.st>=from&&c.st<=to).sort((a,b)=>b.st-a.st);
-    const dt=startedInPeriod[0]?.st||snapDt;
+    const ct=startedInPeriod[0]||cts[cts.length-1]||{};
+    const dt=ct.st||snapDt;
     const isRechurn=firstEver&&firstEver.st<from;
-    newClients.push({name,date:dt,mgr:startedInPeriod[0]?.mgr||mgr,mrr:mrrE,isRechurn});
+    newClients.push({name,date:dt,mgr:ct.mgr||mgr,mrr:mrrE,isRechurn,hudud:ct.hudud||'',dur:ct.dur||0,tUSD:ct.tUSD||0,sUSD:ct.sUSD||0,izoh:ct.izoh||'',raqami:ct.raqami||''});
   }else if(mrrS>0&&mrrE===0){
-    // CHURN — disappeared in period
     const endedInPeriod=cts.filter(c=>c.endD>=from&&c.endD<=to).sort((a,b)=>b.endD-a.endD);
-    const dt=endedInPeriod[0]?.endD||snapDt;
-    churnClients.push({name,date:dt,mgr:endedInPeriod[0]?.mgr||mgr,mrr:mrrS});
+    const ct=endedInPeriod[0]||cts[cts.length-1]||{};
+    const dt=ct.endD||snapDt;
+    churnClients.push({name,date:dt,mgr:ct.mgr||mgr,mrr:mrrS,izoh:ct.izoh||''});
   }else if(mrrS>0&&mrrE>0&&Math.abs(mrrE-mrrS)>1){
     // EXPANSION — MRR changed
     expClients.push({name,mrrStart:mrrS,mrrEnd:mrrE,delta:mrrE-mrrS,mgr});
@@ -350,10 +350,11 @@ ${isCust?`<div style="display:flex;gap:4px;align-items:center;margin-left:4px">
 <div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--teal)"></span>Mijozlar soni — ${periodLabel}</span></div><div class="card-body"><div class="chart-wrap"><canvas id="chClients"></canvas></div></div></div>
 </div>
 
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px">
-<div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--green)"></span>Yangi (${totalNew}) <span style="color:var(--green);font-weight:600">+${fmt(mrrFromNew)}</span></span></div><div class="card-body" style="padding:0;max-height:300px;overflow-y:auto"><table><thead><tr><th>Sana</th><th>Mijoz</th><th>Menejer</th><th class="text-r">MRR</th></tr></thead><tbody>${newClients.length?newClients.map(c=>'<tr><td class="mono" style="font-size:10px;color:var(--text3)">'+fmtD(c.date)+'</td><td style="font-weight:500;font-size:12px">'+c.name+(c.isRechurn?' <span class="badge b-amber" style="font-size:8px;padding:1px 4px">Q</span>':'')+'</td><td style="font-size:10.5px;color:var(--text2)">'+(c.mgr||'—')+'</td><td class="text-r mono" style="color:var(--green);font-size:11px">+'+fmt(c.mrr)+'</td></tr>').join(''):'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">—</td></tr>'}</tbody></table></div></div>
-<div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--red)"></span>Churn (${totalChurn}) <span style="color:var(--red);font-weight:600">-${fmt(mrrFromChurn)}</span></span></div><div class="card-body" style="padding:0;max-height:300px;overflow-y:auto"><table><thead><tr><th>Sana</th><th>Mijoz</th><th>Menejer</th><th class="text-r">MRR</th></tr></thead><tbody>${churnClients.length?churnClients.map(c=>'<tr><td class="mono" style="font-size:10px;color:var(--text3)">'+fmtD(c.date)+'</td><td style="font-weight:500;font-size:12px">'+c.name+'</td><td style="font-size:10.5px;color:var(--text2)">'+(c.mgr||'—')+'</td><td class="text-r mono" style="color:var(--red);font-size:11px">-'+fmt(c.mrr)+'</td></tr>').join(''):'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">—</td></tr>'}</tbody></table></div></div>
-<div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--teal)"></span>Kengayish (${expClients.length}) <span style="color:${expColor};font-weight:600">${mrrExpansion>0?'+':''}${fmt(mrrExpansion)}</span></span></div><div class="card-body" style="padding:0;max-height:300px;overflow-y:auto"><table><thead><tr><th>Mijoz</th><th>Oldin</th><th>Hozir</th><th class="text-r">Farq</th></tr></thead><tbody>${expClients.length?expClients.map(c=>'<tr><td style="font-weight:500;font-size:12px">'+c.name+'</td><td class="mono" style="font-size:11px;color:var(--text3)">'+fmt(c.mrrStart)+'</td><td class="mono" style="font-size:11px">'+fmt(c.mrrEnd)+'</td><td class="text-r mono" style="font-size:11px;color:'+(c.delta>0?'var(--green)':'var(--red)')+'">'+( c.delta>0?'+':'')+fmt(c.delta)+'</td></tr>').join(''):'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">—</td></tr>'}</tbody></table></div></div>
+<div class="card" style="margin-top:14px"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--green)"></span>Yangi mijozlar (${totalNew}) <span style="color:var(--green);font-weight:600">+${fmt(mrrFromNew)}</span></span></div><div class="card-body dash-new-full" style="padding:0;max-height:340px;overflow-y:auto"><table><thead><tr><th>Sana</th><th>Mijoz</th><th class="col-hide">Menejer</th><th class="col-hide">Hudud</th><th class="col-hide">Muddat</th><th class="col-hide text-r">Tadbiq</th><th class="text-r">MRR</th><th class="col-hide text-r">Jami</th><th class="col-hide">Izoh</th></tr></thead><tbody>${newClients.length?newClients.map(c=>{const dur=c.dur?c.dur+' oy':'—';return'<tr><td class="mono" style="font-size:10.5px;color:var(--text3);white-space:nowrap">'+fmtD(c.date)+'</td><td style="font-weight:600;font-size:12px">'+c.name+(c.isRechurn?' <span class="badge b-amber" style="font-size:8px;padding:1px 4px">Q</span>':'')+'</td><td class="col-hide" style="font-size:11px;color:var(--text2)">'+(c.mgr||'—')+'</td><td class="col-hide" style="font-size:11px;color:var(--text2)">'+(c.hudud||'—')+'</td><td class="col-hide mono" style="font-size:11px">'+dur+'</td><td class="col-hide text-r mono" style="font-size:11px">'+(c.tUSD?fmt(c.tUSD):'—')+'</td><td class="text-r mono" style="color:var(--green);font-weight:600">+'+fmt(c.mrr)+'</td><td class="col-hide text-r mono" style="font-size:11px">'+(c.sUSD?fmt(c.sUSD):'—')+'</td><td class="col-hide" style="font-size:10.5px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis">'+(c.izoh||'—')+'</td></tr>'}).join(''):'<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:20px">—</td></tr>'}</tbody></table></div></div>
+
+<div class="dash-churn-exp" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+<div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--red)"></span>Churn (${totalChurn}) <span style="color:var(--red);font-weight:600">-${fmt(mrrFromChurn)}</span></span></div><div class="card-body dash-new-full" style="padding:0;max-height:300px;overflow-y:auto"><table><thead><tr><th>Sana</th><th>Mijoz</th><th class="col-hide">Menejer</th><th class="col-hide">Izoh</th><th class="text-r">MRR</th></tr></thead><tbody>${churnClients.length?churnClients.map(c=>'<tr><td class="mono" style="font-size:10.5px;color:var(--text3);white-space:nowrap">'+fmtD(c.date)+'</td><td style="font-weight:500;font-size:12px">'+c.name+'</td><td class="col-hide" style="font-size:11px;color:var(--text2)">'+(c.mgr||'—')+'</td><td class="col-hide" style="font-size:10.5px;color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis">'+(c.izoh||'—')+'</td><td class="text-r mono" style="color:var(--red);font-weight:600">-'+fmt(c.mrr)+'</td></tr>').join(''):'<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">—</td></tr>'}</tbody></table></div></div>
+<div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--teal)"></span>Kengayish (${expClients.length}) <span style="color:${expColor};font-weight:600">${mrrExpansion>0?'+':''}${fmt(mrrExpansion)}</span></span></div><div class="card-body" style="padding:0;max-height:300px;overflow-y:auto"><table><thead><tr><th>Mijoz</th><th class="text-r">Oldin</th><th class="text-r">Hozir</th><th class="text-r">Farq</th></tr></thead><tbody>${expClients.length?expClients.map(c=>'<tr><td style="font-weight:500;font-size:12px">'+c.name+'</td><td class="text-r mono" style="font-size:11px;color:var(--text3)">'+fmt(c.mrrStart)+'</td><td class="text-r mono" style="font-size:11px">'+fmt(c.mrrEnd)+'</td><td class="text-r mono" style="font-size:11px;font-weight:600;color:'+(c.delta>0?'var(--green)':'var(--red)')+'">'+( c.delta>0?'+':'')+fmt(c.delta)+'</td></tr>').join(''):'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">—</td></tr>'}</tbody></table></div></div>
 </div>
 
 <div class="grid-2"><div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--green)"></span>Status taqsimoti</span></div><div class="card-body"><div class="chart-wrap" style="height:220px"><canvas id="chS"></canvas></div></div></div>
