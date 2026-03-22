@@ -893,6 +893,33 @@ return`<div class="page-header"><div><div class="page-title">Top MRR</div><div c
 <div class="tbl-wrap"><div class="tbl-scroll"><table><thead><tr><th style="width:40px">#</th><th>Mijoz</th><th>Firma</th><th>Menejer</th><th>Hudud</th><th class="text-r">Oylik $</th><th class="text-r">Ulush</th><th style="width:160px">Nisbat</th></tr></thead><tbody>${act.slice(0,40).map((r,i)=>{const p=tM?(r._mUSD/tM*100):0;const rc=i===0?'rk1':i===1?'rk2':i===2?'rk3':'rkn';const bc=i<3?'var(--accent)':i<10?'var(--green)':'var(--amber)';return`<tr><td><span class="rank ${rc}">${i+1}</span></td><td style="font-weight:600">${r.Client||'—'}</td><td style="color:var(--text2);font-size:11px">${r['Firma nomi']||'—'}</td><td style="font-size:12px">${r.Manager||'—'}</td><td style="font-size:11px">${r.Hudud||'—'}</td><td class="text-r mono" style="font-weight:700;font-size:13px">${fmt(r._mUSD)}</td><td class="text-r mono" style="font-size:11px;color:var(--text2)">${p.toFixed(1)}%</td><td><div style="height:7px;background:var(--bg3);border-radius:4px;overflow:hidden"><div style="height:100%;width:${act[0]?Math.min(r._mUSD/act[0]._mUSD*100,100):0}%;background:${bc};border-radius:4px"></div></div></td></tr>`}).join('')}</tbody></table></div></div>`}
 
 // CHARTS
+// DEBUG: Compare mrrOnDate vs mrrData
+function debugMRRcompare(){
+const dt=S.dashTo||new Date();
+const yr=dt.getFullYear(),m=dt.getMonth();
+// mrrOnDate
+const {all,qAll}=buildContracts();
+const snap=mrrOnDate(dt,all,qAll);
+const byClient1={};
+all.forEach(ct=>{if(ct.st<=dt&&ct.endD>=dt&&ct.musd>0)byClient1[ct.client]=(byClient1[ct.client]||0)+ct.musd});
+qAll.forEach(ct=>{if(ct.st<=dt&&ct.endD>=dt&&ct.musd)byClient1[ct.client]=(byClient1[ct.client]||0)+ct.musd});
+// mrrData
+const d=mrrData(yr);
+const byClient2={};
+d.clients.forEach(c=>{if(c.monthly[m])byClient2[c.name]=c.monthly[m]});
+// Compare
+const allN=new Set([...Object.keys(byClient1),...Object.keys(byClient2)]);
+const diffs=[];
+allN.forEach(n=>{
+  const v1=Math.round(byClient1[n]||0),v2=Math.round(byClient2[n]||0);
+  if(v1!==v2)diffs.push({name:n,dashboard:v1,jadval:v2,farq:v2-v1});
+});
+diffs.sort((a,b)=>Math.abs(b.farq)-Math.abs(a.farq));
+console.table(diffs);
+console.log('Dashboard:',snap.total,'Jadval:',d.totals[m],'Farq:',d.totals[m]-snap.total);
+return diffs;
+}
+window.debugMRR=debugMRRcompare;
 function iC(){
 const gc='rgba(0,0,0,.03)',tc='#918f88',bo={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}};
 const co=['#1746a2','#117a52','#a36207','#6941b8','#c42b1c','#0e7c7b','#d4537e','#888','#854f0b','#993556'];
