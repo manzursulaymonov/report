@@ -392,48 +392,41 @@ snapshots.forEach(s=>{totals.push(s.total);cpmArr.push(s.active.size)});
 const newPerPt=[],churnPerPt=[],addedMRR=[],lostMRR=[];
 const beforeDate=new Date(from);beforeDate.setDate(beforeDate.getDate()-1);
 const before=mrrOnDate(beforeDate,all,qAll);
-const fromSnap=mrrOnDate(from,all,qAll);// metrics baseline (from date itself)
+// True baseline: contracts active BEFORE period that survive INTO period
+// st < from (not started on from — those are "new") AND endD >= from (still active)
+const baseMRR={};let baseTotal=0;const baseActive=new Set();
+all.forEach(ct=>{if(ct.musd<=0)return;if(ct.st<from&&ct.endD>=from){baseMRR[ct.client]=(baseMRR[ct.client]||0)+ct.musd;baseActive.add(ct.client);baseTotal+=ct.musd}});
+qAll.forEach(ct=>{if(!ct.musd)return;if(ct.st<from&&ct.endD>=from){baseMRR[ct.client]=(baseMRR[ct.client]||0)+ct.musd;baseActive.add(ct.client);baseTotal+=ct.musd}});
+baseTotal=Math.round(baseTotal);
 for(let i=0;i<snapshots.length;i++){
   const prev=i===0?before:snapshots[i-1];
   const cur=snapshots[i];
   const newOnes=[...cur.active].filter(n=>!prev.active.has(n));
   const gone=[...prev.active].filter(n=>!cur.active.has(n));
   newPerPt.push(newOnes.length);churnPerPt.push(gone.length);
-  // MRR added from new clients
   let added=0;newOnes.forEach(n=>{const ct=all.find(c=>c.client===n&&c.musd>0);if(ct)added+=ct.musd});
-  // MRR lost from churned
   let lost=0;gone.forEach(n=>{const ct=all.filter(c=>c.client===n&&c.musd>0).pop();if(ct)lost+=ct.musd});
   addedMRR.push(added);lostMRR.push(lost);
 }
-// New / Churn / Expansion — all based on MRR snapshots for consistency
 const newClients=[],churnClients=[],expClients=[];
-const startSnap=before;
 const endSnap=snapshots[snapshots.length-1];
 const endDate=points[points.length-1];
 let snapDt=new Date(endDate);
 if(gran==='month'){snapDt=new Date(endDate.getFullYear(),endDate.getMonth()+1,0);if(snapDt>to)snapDt=new Date(to)}
-// Gather all known client names
-const allNames=new Set([...startSnap.active,...endSnap.active]);
-// Group contracts by client for date lookup
+const allNames=new Set([...baseActive,...endSnap.active]);
 const byClient={};
 all.forEach(ct=>{if(!byClient[ct.client])byClient[ct.client]=[];byClient[ct.client].push(ct)});
 allNames.forEach(name=>{
-  let mrrS=0,mrrE=0;
-  all.forEach(ct=>{if(ct.client!==name||ct.musd<=0)return;
-    if(ct.st<=beforeDate&&ct.endD>=beforeDate)mrrS+=ct.musd;
-    if(ct.st<=snapDt&&ct.endD>=snapDt)mrrE+=ct.musd;
-  });
-  qAll.forEach(ct=>{if(ct.client!==name||!ct.musd)return;
-    if(ct.st<=beforeDate&&ct.endD>=beforeDate)mrrS+=ct.musd;
-    if(ct.st<=snapDt&&ct.endD>=snapDt)mrrE+=ct.musd;
-  });
-  mrrS=Math.round(mrrS);mrrE=Math.round(mrrE);
+  const mrrS=Math.round(baseMRR[name]||0);
+  let mrrE=0;
+  all.forEach(ct=>{if(ct.client!==name||ct.musd<=0)return;if(ct.st<=snapDt&&ct.endD>=snapDt)mrrE+=ct.musd});
+  qAll.forEach(ct=>{if(ct.client!==name||!ct.musd)return;if(ct.st<=snapDt&&ct.endD>=snapDt)mrrE+=ct.musd});
+  mrrE=Math.round(mrrE);
   const cts=(byClient[name]||[]).filter(c=>c.musd>0);
   const mgr=(cts[cts.length-1]||{}).mgr||'';
   if(mrrS===0&&mrrE>0){
-    // NEW — verify at least one contract started within [from, to]
     const startedInPeriod=cts.filter(c=>c.st>=from&&c.st<=to).sort((a,b)=>b.st-a.st);
-    if(!startedInPeriod.length)return;// contract started before period, not a new event
+    if(!startedInPeriod.length)return;
     const ct=startedInPeriod[0];
     const firstEver=cts.reduce((a,c)=>c.st<a.st?c:a,cts[0]);
     const hadBefore=firstEver.st<from;
@@ -441,9 +434,8 @@ allNames.forEach(name=>{
     const isRechurn=hadBefore&&!wasActiveBeforePeriod;
     newClients.push({name,date:ct.st,mgr:ct.mgr||mgr,mrr:mrrE,isRechurn,hudud:ct.hudud||'',dur:ct.dur||0,tUSD:ct.tUSD||0,sUSD:ct.sUSD||0,izoh:ct.izoh||'',raqami:ct.raqami||''});
   }else if(mrrS>0&&mrrE===0){
-    // CHURN — verify at least one contract ended within [from, to]
     const endedInPeriod=cts.filter(c=>c.endD>=from&&c.endD<=to).sort((a,b)=>b.endD-a.endD);
-    if(!endedInPeriod.length)return;// contract ended before period, not a churn event
+    if(!endedInPeriod.length)return;
     const ct=endedInPeriod[0];
     churnClients.push({name,date:ct.endD,mgr:ct.mgr||mgr,mrr:mrrS,izoh:ct.izoh||''});
   }else if(mrrS>0&&mrrE>0&&Math.abs(mrrE-mrrS)>1){
@@ -453,14 +445,14 @@ allNames.forEach(name=>{
 newClients.sort((a,b)=>b.date-a.date);
 churnClients.sort((a,b)=>b.date-a.date);
 expClients.sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
-return{labels,totals,cpmArr,newPerPt,churnPerPt,addedMRR,lostMRR,newClients,churnClients,expClients,gran,points,beforeMRR:before.total,beforeClients:before.active.size,fromMRR:fromSnap.total,fromClients:fromSnap.active.size};
+return{labels,totals,cpmArr,newPerPt,churnPerPt,addedMRR,lostMRR,newClients,churnClients,expClients,gran,points,baseMRR:baseTotal,baseClients:baseActive.size};
 }
 function rD(){
 const dr=dashRange();
-const {labels,totals,cpmArr,newPerPt,churnPerPt,addedMRR,lostMRR,newClients,churnClients,expClients,beforeMRR,beforeClients,fromMRR,fromClients}=dr;
+const {labels,totals,cpmArr,newPerPt,churnPerPt,addedMRR,lostMRR,newClients,churnClients,expClients,baseMRR,baseClients}=dr;
 const tot=S.rows.length,clients=[...new Set(S.rows.map(r=>r.Client).filter(Boolean))];
 const curMRR=totals[totals.length-1]||0;
-const startMRR=beforeMRR||0;
+const startMRR=baseMRR||0;
 const mrrDelta=curMRR-startMRR;
 const mrrPct=startMRR?Math.round(mrrDelta/startMRR*100):0;
 const totalNew=newClients.length;
@@ -470,7 +462,7 @@ const curClients=cpmArr[cpmArr.length-1]||0;
 const mrrFromNew=newClients.reduce((s,c)=>s+c.mrr,0);
 const mrrFromChurn=churnClients.reduce((s,c)=>s+c.mrr,0);
 const mrrExpansion=expClients.reduce((s,c)=>s+c.delta,0);
-const startClients=beforeClients||0;
+const startClients=baseClients||0;
 const clientDelta=curClients-startClients;
 const mrrFromRechurn=newClients.filter(c=>c.isRechurn).reduce((s,c)=>s+c.mrr,0);
 const mrrFromPureNew=mrrFromNew-mrrFromRechurn;
@@ -904,10 +896,10 @@ ${sections.map(s=>`<label style="display:flex;align-items:center;gap:8px;padding
 
 async function generateReport(){
 const dr=dashRange();
-const {labels,totals,cpmArr,newClients,churnClients,expClients,beforeMRR,beforeClients,fromMRR,fromClients}=dr;
-const curMRR=totals[totals.length-1]||0;const startMRR=beforeMRR||0;
+const {labels,totals,cpmArr,newClients,churnClients,expClients,baseMRR,baseClients}=dr;
+const curMRR=totals[totals.length-1]||0;const startMRR=baseMRR||0;
 const mrrDelta=curMRR-startMRR;const mrrPct=startMRR?Math.round(mrrDelta/startMRR*100):0;
-const curClients=cpmArr[cpmArr.length-1]||0;const startClients=beforeClients||0;
+const curClients=cpmArr[cpmArr.length-1]||0;const startClients=baseClients||0;
 const clientDelta=curClients-startClients;
 const totalNew=newClients.length;const totalRechurn=newClients.filter(c=>c.isRechurn).length;
 const totalChurn=churnClients.length;
