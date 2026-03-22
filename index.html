@@ -392,12 +392,6 @@ snapshots.forEach(s=>{totals.push(s.total);cpmArr.push(s.active.size)});
 const newPerPt=[],churnPerPt=[],addedMRR=[],lostMRR=[];
 const beforeDate=new Date(from);beforeDate.setDate(beforeDate.getDate()-1);
 const before=mrrOnDate(beforeDate,all,qAll);
-// True baseline: contracts active BEFORE period that survive INTO period
-// st < from (not started on from — those are "new") AND endD >= from (still active)
-const baseMRR={};let baseTotal=0;const baseActive=new Set();
-all.forEach(ct=>{if(ct.musd<=0)return;if(ct.st<from&&ct.endD>=from){baseMRR[ct.client]=(baseMRR[ct.client]||0)+ct.musd;baseActive.add(ct.client);baseTotal+=ct.musd}});
-qAll.forEach(ct=>{if(!ct.musd)return;if(ct.st<from&&ct.endD>=from){baseMRR[ct.client]=(baseMRR[ct.client]||0)+ct.musd;baseActive.add(ct.client);baseTotal+=ct.musd}});
-baseTotal=Math.round(baseTotal);
 for(let i=0;i<snapshots.length;i++){
   const prev=i===0?before:snapshots[i-1];
   const cur=snapshots[i];
@@ -413,39 +407,67 @@ const endSnap=snapshots[snapshots.length-1];
 const endDate=points[points.length-1];
 let snapDt=new Date(endDate);
 if(gran==='month'){snapDt=new Date(endDate.getFullYear(),endDate.getMonth()+1,0);if(snapDt>to)snapDt=new Date(to)}
-const allNames=new Set([...baseActive,...endSnap.active]);
+// Per-client mrrS (beforeDate) and mrrE (snapDt)
 const byClient={};
 all.forEach(ct=>{if(!byClient[ct.client])byClient[ct.client]=[];byClient[ct.client].push(ct)});
+const clientMRR={};
+const allNames=new Set([...before.active,...endSnap.active]);
 allNames.forEach(name=>{
-  const mrrS=Math.round(baseMRR[name]||0);
-  let mrrE=0;
-  all.forEach(ct=>{if(ct.client!==name||ct.musd<=0)return;if(ct.st<=snapDt&&ct.endD>=snapDt)mrrE+=ct.musd});
-  qAll.forEach(ct=>{if(ct.client!==name||!ct.musd)return;if(ct.st<=snapDt&&ct.endD>=snapDt)mrrE+=ct.musd});
-  mrrE=Math.round(mrrE);
+  let mrrS=0,mrrE=0;
+  all.forEach(ct=>{if(ct.client!==name||ct.musd<=0)return;
+    if(ct.st<=beforeDate&&ct.endD>=beforeDate)mrrS+=ct.musd;
+    if(ct.st<=snapDt&&ct.endD>=snapDt)mrrE+=ct.musd;
+  });
+  qAll.forEach(ct=>{if(ct.client!==name||!ct.musd)return;
+    if(ct.st<=beforeDate&&ct.endD>=beforeDate)mrrS+=ct.musd;
+    if(ct.st<=snapDt&&ct.endD>=snapDt)mrrE+=ct.musd;
+  });
+  clientMRR[name]={s:Math.round(mrrS),e:Math.round(mrrE)};
+});
+// Categorize and compute startMRR
+let startMRRsum=0;
+allNames.forEach(name=>{
+  const {s:mrrS,e:mrrE}=clientMRR[name];
   const cts=(byClient[name]||[]).filter(c=>c.musd>0);
   const mgr=(cts[cts.length-1]||{}).mgr||'';
   if(mrrS===0&&mrrE>0){
-    const startedInPeriod=cts.filter(c=>c.st>=from&&c.st<=to).sort((a,b)=>b.st-a.st);
-    if(!startedInPeriod.length)return;
-    const ct=startedInPeriod[0];
-    const firstEver=cts.reduce((a,c)=>c.st<a.st?c:a,cts[0]);
-    const hadBefore=firstEver.st<from;
-    const wasActiveBeforePeriod=cts.some(c=>c.endD>=new Date(from.getTime()-2*864e5)&&c.st<from);
-    const isRechurn=hadBefore&&!wasActiveBeforePeriod;
-    newClients.push({name,date:ct.st,mgr:ct.mgr||mgr,mrr:mrrE,isRechurn,hudud:ct.hudud||'',dur:ct.dur||0,tUSD:ct.tUSD||0,sUSD:ct.sUSD||0,izoh:ct.izoh||'',raqami:ct.raqami||''});
+    // Candidate for NEW — but check if had contract ending right before
+    const hadBeforeContract=cts.some(c=>c.st<=beforeDate&&c.endD>=beforeDate);
+    if(hadBeforeContract){
+      // Contract ended on beforeDate, new starts on from → NOT new, continuation
+      startMRRsum+=mrrE;// treat as unchanged baseline
+    }else{
+      const startedInPeriod=cts.filter(c=>c.st>=from&&c.st<=to).sort((a,b)=>b.st-a.st);
+      if(!startedInPeriod.length)return;
+      const ct=startedInPeriod[0];
+      const firstEver=cts.reduce((a,c)=>c.st<a.st?c:a,cts[0]);
+      const hadBefore=firstEver.st<from;
+      const wasActiveBeforePeriod=cts.some(c=>c.endD>=new Date(from.getTime()-2*864e5)&&c.st<from);
+      const isRechurn=hadBefore&&!wasActiveBeforePeriod;
+      newClients.push({name,date:ct.st,mgr:ct.mgr||mgr,mrr:mrrE,isRechurn,hudud:ct.hudud||'',dur:ct.dur||0,tUSD:ct.tUSD||0,sUSD:ct.sUSD||0,izoh:ct.izoh||'',raqami:ct.raqami||''});
+      // NOT in startMRR
+    }
   }else if(mrrS>0&&mrrE===0){
     const endedInPeriod=cts.filter(c=>c.endD>=from&&c.endD<=to).sort((a,b)=>b.endD-a.endD);
-    if(!endedInPeriod.length)return;
-    const ct=endedInPeriod[0];
-    churnClients.push({name,date:ct.endD,mgr:ct.mgr||mgr,mrr:mrrS,izoh:ct.izoh||''});
-  }else if(mrrS>0&&mrrE>0&&Math.abs(mrrE-mrrS)>1){
-    expClients.push({name,mrrStart:mrrS,mrrEnd:mrrE,delta:mrrE-mrrS,mgr});
+    if(endedInPeriod.length){
+      churnClients.push({name,date:endedInPeriod[0].endD,mgr:endedInPeriod[0].mgr||mgr,mrr:mrrS,izoh:endedInPeriod[0].izoh||''});
+      startMRRsum+=mrrS;// WAS in baseline, now churned
+    }
+    // else: ended before period (31.12 churn without renewal) → skip entirely
+  }else if(mrrS>0&&mrrE>0){
+    startMRRsum+=mrrS;// in baseline
+    if(Math.abs(mrrE-mrrS)>1){
+      expClients.push({name,mrrStart:mrrS,mrrEnd:mrrE,delta:mrrE-mrrS,mgr});
+    }
   }
+  // mrrS===0 && mrrE===0 → skip
 });
 newClients.sort((a,b)=>b.date-a.date);
 churnClients.sort((a,b)=>b.date-a.date);
 expClients.sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
-return{labels,totals,cpmArr,newPerPt,churnPerPt,addedMRR,lostMRR,newClients,churnClients,expClients,gran,points,baseMRR:baseTotal,baseClients:baseActive.size};
+const baseTotal=Math.round(startMRRsum);
+const baseClients=allNames.size-newClients.length-[...allNames].filter(n=>clientMRR[n].s===0&&clientMRR[n].e===0).length;
+return{labels,totals,cpmArr,newPerPt,churnPerPt,addedMRR,lostMRR,newClients,churnClients,expClients,gran,points,baseMRR:baseTotal,baseClients:before.active.size};
 }
 function rD(){
 const dr=dashRange();
