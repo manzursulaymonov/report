@@ -903,7 +903,7 @@ ${sections.map(s=>`<label style="display:flex;align-items:center;gap:8px;padding
 
 async function generateReport(){
 const dr=dashRange();
-const {labels,totals,cpmArr,newClients,churnClients,expClients,fromMRR,fromClients}=dr;
+const {labels,totals,cpmArr,newClients,churnClients,expClients,beforeMRR,beforeClients,fromMRR,fromClients}=dr;
 const curMRR=totals[totals.length-1]||0;const startMRR=beforeMRR||0;
 const mrrDelta=curMRR-startMRR;const mrrPct=startMRR?Math.round(mrrDelta/startMRR*100):0;
 const curClients=cpmArr[cpmArr.length-1]||0;const startClients=beforeClients||0;
