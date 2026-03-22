@@ -63,11 +63,13 @@ select.flt{padding:8px 28px 8px 10px;border:1px solid var(--border);border-radiu
 .mrr-tbl thead .sticky-col{z-index:5;background:#f5f4f0}
 .mrr-tbl .col-name{left:0;min-width:150px;max-width:150px;text-align:left;border-right:2px solid var(--border);font-weight:500}
 .mrr-tbl .mcell{text-align:right;font-family:var(--mono);font-size:10.5px;min-width:62px;white-space:nowrap;transition:background .12s}
-.mrr-tbl .mcell-g{background:rgba(17,122,82,0.11)}.mrr-tbl .mcell-y{background:rgba(220,170,40,0.15);cursor:help}.mrr-tbl .mcell-0{color:#d8d7d0}
+.mrr-tbl .mcell-g{background:rgba(17,122,82,0.18)}.mrr-tbl .mcell-y{background:rgba(220,170,40,0.22);cursor:help}.mrr-tbl .mcell-0{color:#d8d7d0}
 .mrr-tbl .summary-row td{border-bottom:2px solid var(--border)}
 .mrr-tbl .row-mom td{color:var(--text3);font-size:9.5px;font-style:italic;font-weight:500}
 .mrr-tbl .row-total td{color:var(--text);background:#efeee8;font-weight:700;font-size:11.5px}
-.mrr-tbl tbody tr:hover td{background:rgba(23,70,162,0.04) !important}
+.mrr-tbl tbody tr:hover td:not(.mcell-g):not(.mcell-y){background:rgba(23,70,162,0.04) !important}
+.mrr-tbl tbody tr:hover td.mcell-g{background:rgba(17,122,82,0.14) !important}
+.mrr-tbl tbody tr:hover td.mcell-y{background:rgba(220,170,40,0.17) !important}
 .mrr-tbl tbody tr:hover .sticky-col{background:#f5f4ef !important}
 .mrr-tip{position:fixed;z-index:999;background:#1a1917;color:#f0efeb;padding:10px 14px;border-radius:8px;font-size:11.5px;line-height:1.6;pointer-events:none;max-width:240px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .mrr-tip b{color:#5ae4a7}.mrr-tip .tip-warn{color:#ffd866}
@@ -89,6 +91,7 @@ select.flt{padding:8px 28px 8px 10px;border:1px solid var(--border);border-radiu
 <div class="nav-item" data-sec="managers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>Menejerlar</div>
 <div class="nav-item" data-sec="clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>Mijozlar</div>
 <div class="nav-item" data-sec="topmrr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22,7 13.5,15.5 8.5,10.5 2,17"/><polyline points="16,7 22,7 22,13"/></svg>Top MRR</div>
+<div class="nav-item" data-sec="debts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Qarzdorlik</div>
 </nav>
 <div class="sidebar-bottom"><div class="bc" onclick="showConfig()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Sozlamalar</div><div class="info">Google Sheets → Live<br>Yangilangan: <span id="upd">—</span></div></div>
 </aside>
@@ -97,7 +100,7 @@ select.flt{padding:8px 28px 8px 10px;border:1px solid var(--border);border-radiu
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script>
-const S={rows:[],qRows:[],payRows:[],y2024Rows:[],perevodRows:[],config:null,sec:'dashboard',cP:0,cN:40,cQ:'',cS:'',cM:'',cR:'',mP:0,mN:40,mQ:'',clP:0,clN:40,clQ:'',mrrP:0,mrrQ:'',mrrYear:2026,dashPre:'y',dashFrom:new Date(2026,0,1),dashTo:new Date(),mrrCols:{mgr:true,hudud:true,mrr:true,deal:true,end:true},mrrSet:false};
+const S={rows:[],qRows:[],payRows:[],y2024Rows:[],perevodRows:[],config:null,sec:'dashboard',cP:0,cN:40,cQ:'',cS:'',cM:'',cR:'',mP:0,mN:40,mQ:'',clP:0,clN:40,clQ:'',mrrP:0,mrrQ:'',mrrYear:2026,dashPre:'y',dashFrom:new Date(2026,0,1),dashTo:new Date(),mrrCols:{mgr:true,hudud:true,mrr:true,deal:true,end:true},mrrSet:false,debtDate:new Date()};
 function pn(s){return parseFloat((s||'').replace(/[$\s]/g,'').replace(/,/g,''))||0}
 function fmt(n){return n?Math.round(n).toLocaleString('en-US').replace(/,/g,' '):'—'}
 function fk(n){return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1000?Math.round(n/1000)+'k':Math.round(n)}
@@ -318,7 +321,7 @@ let _rdT;function render(){clearTimeout(_rdT);_rdT=setTimeout(_render,0)}
 function _render(){if(!S.rows.length){showWelcome();return}
 const ae=document.activeElement;const isInput=ae&&ae.tagName==='INPUT'&&ae.type==='text';
 const sel=isInput?{s:ae.selectionStart,e:ae.selectionEnd,sec:S.sec,ph:ae.placeholder}:null;
-const f={dashboard:rD,contracts:rC,mrrtable:rMRR,managers:rM,clients:rCl,topmrr:rT};
+const f={dashboard:rD,contracts:rC,mrrtable:rMRR,managers:rM,clients:rCl,topmrr:rT,debts:rDebt};
 document.getElementById('root').innerHTML=(f[S.sec]||rD)();iC();
 if(sel&&sel.sec===S.sec){const inp=document.querySelector('input[placeholder="'+sel.ph+'"]');if(inp){inp.focus();inp.setSelectionRange(sel.s,sel.e)}}}
 
@@ -373,30 +376,18 @@ return{all,qAll};
 function dashRange(){
 const from=S.dashFrom,to=S.dashTo;
 const days=Math.round((to-from)/864e5);
-// Granularity
-let gran='month';
-if(days<=45)gran='day';
-else if(days<=180)gran='week';
-// Generate date points
+let gran=days<=31?'day':'month';
 const points=[];
 if(gran==='day'){
   for(let d=new Date(from);d<=to;d.setDate(d.getDate()+1))
     points.push(new Date(d));
-}else if(gran==='week'){
-  const d=new Date(from);
-  // Align to Monday
-  const dow=d.getDay()||7;d.setDate(d.getDate()-(dow-1));
-  while(d<=to){points.push(new Date(d));d.setDate(d.getDate()+7)}
 }else{
-  // Monthly
   for(let d=new Date(from.getFullYear(),from.getMonth(),1);d<=to;d.setMonth(d.getMonth()+1))
     points.push(new Date(d));
 }
 if(!points.length)points.push(new Date(from));
-// Labels
 const labels=points.map(d=>{
   if(gran==='day')return fmtD(d);
-  if(gran==='week')return fmtD(d);
   const mos=['Yan','Fev','Mar','Apr','May','Iyn','Iyl','Avg','Sen','Okt','Noy','Dek'];
   const span=(to.getFullYear()-from.getFullYear())*12+(to.getMonth()-from.getMonth());
   return span>11?mos[d.getMonth()]+' '+(d.getFullYear()%100):mos[d.getMonth()];
@@ -405,9 +396,7 @@ const labels=points.map(d=>{
 const {all,qAll}=buildContracts();
 const totals=[],cpmArr=[];
 const snapshots=points.map(pt=>{
-  // For week/month, use last day of period
   let snapDate=pt;
-  if(gran==='week'){snapDate=new Date(pt);snapDate.setDate(snapDate.getDate()+6);if(snapDate>to)snapDate=new Date(to)}
   if(gran==='month'){snapDate=new Date(pt.getFullYear(),pt.getMonth()+1,0);if(snapDate>to)snapDate=new Date(to)}
   return mrrOnDate(snapDate,all,qAll);
 });
@@ -435,7 +424,6 @@ const startSnap=before;
 const endSnap=snapshots[snapshots.length-1];
 const endDate=points[points.length-1];
 let snapDt=new Date(endDate);
-if(gran==='week'){snapDt.setDate(snapDt.getDate()+6);if(snapDt>to)snapDt=new Date(to)}
 if(gran==='month'){snapDt=new Date(endDate.getFullYear(),endDate.getMonth()+1,0);if(snapDt>to)snapDt=new Date(to)}
 // Gather all known client names
 const allNames=new Set([...startSnap.active,...endSnap.active]);
@@ -461,7 +449,10 @@ allNames.forEach(name=>{
     const startedInPeriod=cts.filter(c=>c.st>=from&&c.st<=to).sort((a,b)=>b.st-a.st);
     const ct=startedInPeriod[0]||cts[cts.length-1]||{};
     const dt=ct.st||snapDt;
-    const isRechurn=firstEver&&firstEver.st<from;
+    // Rechurn: had contracts before period BUT was NOT active right before period (gap exists)
+    const hadBefore=firstEver&&firstEver.st<from;
+    const wasActiveBeforePeriod=cts.some(c=>c.endD>=new Date(from.getTime()-2*864e5)&&c.st<from);
+    const isRechurn=hadBefore&&!wasActiveBeforePeriod;
     newClients.push({name,date:dt,mgr:ct.mgr||mgr,mrr:mrrE,isRechurn,hudud:ct.hudud||'',dur:ct.dur||0,tUSD:ct.tUSD||0,sUSD:ct.sUSD||0,izoh:ct.izoh||'',raqami:ct.raqami||''});
   }else if(mrrS>0&&mrrE===0){
     const endedInPeriod=cts.filter(c=>c.endD>=from&&c.endD<=to).sort((a,b)=>b.endD-a.endD);
@@ -482,8 +473,6 @@ function rD(){
 const dr=dashRange();
 const {labels,totals,cpmArr,newPerPt,churnPerPt,addedMRR,lostMRR,newClients,churnClients,expClients}=dr;
 const tot=S.rows.length,clients=[...new Set(S.rows.map(r=>r.Client).filter(Boolean))];
-const recent=[...S.rows].filter(r=>r.sanasi).sort((a,b)=>(pd(b.sanasi)||0)-(pd(a.sanasi)||0)).slice(0,8);
-const tDebt=calcDebtTable(S.dashTo||new Date()).slice(0,10);
 const curMRR=totals[totals.length-1]||0;
 const startMRR=totals[0]||0;
 const mrrDelta=curMRR-startMRR;
@@ -496,6 +485,10 @@ const curClients=cpmArr[cpmArr.length-1]||0;
 const mrrFromNew=newClients.reduce((s,c)=>s+c.mrr,0);
 const mrrFromChurn=churnClients.reduce((s,c)=>s+c.mrr,0);
 const mrrExpansion=expClients.reduce((s,c)=>s+c.delta,0);
+const startClients=cpmArr[0]||0;
+const clientDelta=curClients-startClients;
+const mrrFromRechurn=newClients.filter(c=>c.isRechurn).reduce((s,c)=>s+c.mrr,0);
+const mrrFromPureNew=mrrFromNew-mrrFromRechurn;
 const expColor=mrrExpansion>=0?'#0e7c7b':'#a36207';
 const periodLabel=labels.length>1?labels[0]+'–'+labels[labels.length-1]:labels[0]||'';
 const lastLabel=labels[labels.length-1]||'';
@@ -512,13 +505,13 @@ ${isCust?`<div style="display:flex;gap:4px;align-items:center;margin-left:4px">
 <span style="color:var(--text3)">→</span>
 <input type="date" class="flt" style="font-size:11px;padding:5px" value="${S.dashTo.toISOString().slice(0,10)}" onchange="S.dashTo=new Date(this.value);render()">
 </div>`:''}
-<span style="font-size:10.5px;color:var(--text3);margin-left:4px">${dr.gran==='day'?'kunlik':dr.gran==='week'?'haftalik':'oylik'}</span>
+<span style="font-size:10.5px;color:var(--text3);margin-left:4px">${dr.gran==='day'?'kunlik':'oylik'}</span>
 </div>
-<div class="metrics"><div class="metric c1"><div class="metric-lbl">Aktiv mijozlar</div><div class="metric-val">${curClients}</div><div class="metric-foot">${lastLabel}</div></div>
+<div class="metrics"><div class="metric c1"><div class="metric-lbl">Aktiv mijozlar</div><div class="metric-val">${curClients}</div><div class="metric-foot"><span class="${clientDelta>=0?'up':'dn'}">${clientDelta>0?'+':''}${clientDelta}</span> ${periodLabel}</div></div>
 <div class="metric c2"><div class="metric-lbl">Yangi qo'shilgan</div><div class="metric-val">${totalNew}</div><div class="metric-foot"><span class="up">+${totalNew}</span> ${periodLabel}${totalRechurn?' · <span style="color:var(--amber)">qayta: '+totalRechurn+'</span>':''}</div></div>
 <div class="metric c4"><div class="metric-lbl">Chiqib ketgan</div><div class="metric-val">${totalChurn}</div><div class="metric-foot"><span class="dn">${totalChurn>0?'-':''}${totalChurn}</span> ${periodLabel}</div></div>
-<div class="metric c3"><div class="metric-lbl">MRR</div><div class="metric-val">${fmt(curMRR)}</div><div class="metric-foot">${lastLabel} · USD</div></div>
-<div class="metric c5"><div class="metric-lbl">MRR o'zgarish</div><div class="metric-val">${mrrDelta>0?'+':''}${fmt(mrrDelta)}</div><div class="metric-foot" style="display:flex;flex-direction:column;gap:1px;line-height:1.4"><span class="up">yangi: +${fmt(mrrFromNew)}</span><span class="dn">churn: -${fmt(mrrFromChurn)}</span><span style="color:${expColor}">keng: ${mrrExpansion>0?'+':''}${fmt(mrrExpansion)}</span></div></div></div>
+<div class="metric c3"><div class="metric-lbl">MRR</div><div class="metric-val">${fmt(curMRR)}</div><div class="metric-foot"><span class="${mrrDelta>=0?'up':'dn'}">${mrrDelta>0?'+':''}${fmt(mrrDelta)} (${mrrPct>0?'+':''}${mrrPct}%)</span></div></div>
+<div class="metric c5"><div class="metric-lbl">MRR o'zgarish</div><div class="metric-val">${mrrDelta>0?'+':''}${fmt(mrrDelta)}</div><div class="metric-foot" style="display:flex;flex-direction:column;gap:1px;line-height:1.4"><span class="up">yangi: +${fmt(mrrFromNew)}${totalRechurn?' (Q:'+fmt(mrrFromRechurn)+')':''}</span><span class="dn">churn: -${fmt(mrrFromChurn)}</span><span style="color:${expColor}">keng: ${mrrExpansion>0?'+':''}${fmt(mrrExpansion)}</span></div></div></div>
 
 <div class="grid-2">
 <div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--accent)"></span>MRR trend — ${periodLabel}</span></div><div class="card-body"><div class="chart-wrap"><canvas id="chTrend"></canvas></div></div></div>
@@ -530,11 +523,7 @@ ${isCust?`<div style="display:flex;gap:4px;align-items:center;margin-left:4px">
 <div class="dash-churn-exp" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
 <div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--red)"></span>Churn (${totalChurn}) <span style="color:var(--red);font-weight:600">-${fmt(mrrFromChurn)}</span></span></div><div class="card-body dash-new-full" style="padding:0;max-height:300px;overflow-y:auto"><table><thead><tr><th>Sana</th><th>Mijoz</th><th class="col-hide">Menejer</th><th class="col-hide">Izoh</th><th class="text-r">MRR</th></tr></thead><tbody>${churnClients.length?churnClients.map(c=>'<tr><td class="mono" style="font-size:10.5px;color:var(--text3);white-space:nowrap">'+fmtD(c.date)+'</td><td style="font-weight:500;font-size:12px">'+c.name+'</td><td class="col-hide" style="font-size:11px;color:var(--text2)">'+(c.mgr||'—')+'</td><td class="col-hide" style="font-size:10.5px;color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis">'+(c.izoh||'—')+'</td><td class="text-r mono" style="color:var(--red);font-weight:600">-'+fmt(c.mrr)+'</td></tr>').join(''):'<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">—</td></tr>'}</tbody></table></div></div>
 <div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--teal)"></span>Kengayish (${expClients.length}) <span style="color:${expColor};font-weight:600">${mrrExpansion>0?'+':''}${fmt(mrrExpansion)}</span></span></div><div class="card-body" style="padding:0;max-height:300px;overflow-y:auto"><table><thead><tr><th>Mijoz</th><th class="text-r">Oldin</th><th class="text-r">Hozir</th><th class="text-r">Farq</th></tr></thead><tbody>${expClients.length?expClients.map(c=>'<tr><td style="font-weight:500;font-size:12px">'+c.name+'</td><td class="text-r mono" style="font-size:11px;color:var(--text3)">'+fmt(c.mrrStart)+'</td><td class="text-r mono" style="font-size:11px">'+fmt(c.mrrEnd)+'</td><td class="text-r mono" style="font-size:11px;font-weight:600;color:'+(c.delta>0?'var(--green)':'var(--red)')+'">'+( c.delta>0?'+':'')+fmt(c.delta)+'</td></tr>').join(''):'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">—</td></tr>'}</tbody></table></div></div>
-</div>
-
-<div class="grid-2"><div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--green)"></span>Status taqsimoti</span></div><div class="card-body"><div class="chart-wrap" style="height:220px"><canvas id="chS"></canvas></div></div></div>
-<div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--red)"></span>Qarzdorlik (${lastLabel} oy oxiriga)</span></div><div class="card-body" style="padding:0;max-height:320px;overflow-y:auto"><table><thead><tr><th>Mijoz</th><th>Firma</th><th class="text-r">Sh. qoldiq</th><th class="text-r">Oy oxiri</th><th class="text-r">Kelishuv</th></tr></thead><tbody>${tDebt.length?tDebt.map(r=>'<tr><td style="font-weight:500">'+r.name+'</td><td style="color:var(--text2);font-size:11px;max-width:130px;overflow:hidden;text-overflow:ellipsis">'+(r.firma||'—')+'</td><td class="text-r mono" style="font-size:11px;color:var(--text3)">'+(r.qoldiq>0?fmt(r.qoldiq):'—')+'</td><td class="text-r mono" style="font-size:11px;color:'+(r.oyQarz>0?'var(--amber)':'var(--green)')+';font-weight:'+(r.oyQarz>0?'600':'400')+'">'+(r.oyQarz>0?fmt(r.oyQarz):'—')+'</td><td class="text-r mono" style="font-size:11px;color:'+(r.kelQarz>0?'var(--red)':'var(--green)')+';font-weight:'+(r.kelQarz>0?'700':'400')+'">'+(r.kelQarz>0?fmt(r.kelQarz):'—')+'</td></tr>').join(''):'<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">—</td></tr>'}</tbody></table></div></div></div>
-<div class="card" style="margin-top:14px"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--amber)"></span>Oxirgi shartnomalar</span></div><div class="card-body" style="padding:0"><table><thead><tr><th>Mijoz</th><th>Menejer</th><th>Sana</th><th class="text-r">Oylik $</th><th>Status</th></tr></thead><tbody>${recent.map(r=>`<tr><td style="font-weight:500">${r.Client||'—'}</td><td style="color:var(--text2)">${r.Manager||'—'}</td><td class="mono" style="font-size:11px">${r.sanasi}</td><td class="text-r mono">${fmt(r._mUSD)}</td><td>${sb(r.status)}</td></tr>`).join('')}</tbody></table></div></div>`}
+</div>`}
 
 // CONTRACTS
 function rC(){
@@ -892,6 +881,28 @@ return`<div class="page-header"><div><div class="page-title">Top MRR</div><div c
 <div class="card"><div class="card-head"><span class="card-label"><span class="dot" style="background:var(--purple)"></span>Konsentratsiya</span></div><div class="card-body"><div class="chart-wrap" style="height:220px"><canvas id="chK"></canvas></div></div></div></div>
 <div class="tbl-wrap"><div class="tbl-scroll"><table><thead><tr><th style="width:40px">#</th><th>Mijoz</th><th>Firma</th><th>Menejer</th><th>Hudud</th><th class="text-r">Oylik $</th><th class="text-r">Ulush</th><th style="width:160px">Nisbat</th></tr></thead><tbody>${act.slice(0,40).map((r,i)=>{const p=tM?(r._mUSD/tM*100):0;const rc=i===0?'rk1':i===1?'rk2':i===2?'rk3':'rkn';const bc=i<3?'var(--accent)':i<10?'var(--green)':'var(--amber)';return`<tr><td><span class="rank ${rc}">${i+1}</span></td><td style="font-weight:600">${r.Client||'—'}</td><td style="color:var(--text2);font-size:11px">${r['Firma nomi']||'—'}</td><td style="font-size:12px">${r.Manager||'—'}</td><td style="font-size:11px">${r.Hudud||'—'}</td><td class="text-r mono" style="font-weight:700;font-size:13px">${fmt(r._mUSD)}</td><td class="text-r mono" style="font-size:11px;color:var(--text2)">${p.toFixed(1)}%</td><td><div style="height:7px;background:var(--bg3);border-radius:4px;overflow:hidden"><div style="height:100%;width:${act[0]?Math.min(r._mUSD/act[0]._mUSD*100,100):0}%;background:${bc};border-radius:4px"></div></div></td></tr>`}).join('')}</tbody></table></div></div>`}
 
+// DEBTS page
+function rDebt(){
+const now=new Date();
+const repDate=S.debtDate||now;
+const dt=calcDebtTable(repDate);
+const totalKel=dt.reduce((s,r)=>s+(r.kelQarz>0?r.kelQarz:0),0);
+const totalOy=dt.reduce((s,r)=>s+(r.oyQarz>0?r.oyQarz:0),0);
+const mos=['Yan','Fev','Mar','Apr','May','Iyn','Iyl','Avg','Sen','Okt','Noy','Dek'];
+const repLabel=mos[repDate.getMonth()]+' '+repDate.getFullYear();
+return`<div class="page-header"><div><div class="page-title">Qarzdorlik</div><div class="page-sub">${repLabel} oy oxiriga · ${dt.length} ta mijoz</div></div>
+<div style="display:flex;gap:6px;align-items:center">
+<input type="date" class="flt" style="font-size:12px;padding:6px 10px" value="${repDate.toISOString().slice(0,10)}" onchange="S.debtDate=new Date(this.value);render()">
+</div></div>
+<div class="metrics" style="grid-template-columns:repeat(2,1fr);margin-bottom:14px">
+<div class="metric c4"><div class="metric-lbl">Oy oxiri qarzi (jami)</div><div class="metric-val">${fmt(totalOy)}</div><div class="metric-foot">USD</div></div>
+<div class="metric c4"><div class="metric-lbl">Kelishuv qarzi (jami)</div><div class="metric-val">${fmt(totalKel)}</div><div class="metric-foot">USD</div></div>
+</div>
+<div class="tbl-wrap"><div class="tbl-scroll"><table><thead><tr><th>Mijoz</th><th class="text-r">Sh. qoldiq</th><th class="text-r">Oy oxiri</th><th class="text-r">Kelishuv</th></tr></thead><tbody>${dt.length?dt.map(r=>{
+const oyC=r.oyQarz>0?'var(--amber)':'var(--green)';
+const kelC=r.kelQarz>0?'var(--red)':'var(--green)';
+return'<tr><td style="font-weight:500">'+r.name+'</td><td class="text-r mono" style="font-size:11px;color:var(--text3)">'+(r.qoldiq>0?fmt(r.qoldiq):'—')+'</td><td class="text-r mono" style="font-size:11px;color:'+oyC+';font-weight:'+(r.oyQarz>0?'600':'400')+'">'+(r.oyQarz>0?fmt(r.oyQarz):'—')+'</td><td class="text-r mono" style="font-size:11px;color:'+kelC+';font-weight:'+(r.kelQarz>0?'700':'400')+'">'+(r.kelQarz>0?fmt(r.kelQarz):'—')+'</td></tr>'}).join(''):'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">—</td></tr>'}</tbody></table></div></div>`}
+
 // CHARTS
 // DEBUG: Compare mrrOnDate vs mrrData
 function debugMRRcompare(){
@@ -940,7 +951,7 @@ const eCl=document.getElementById('chClients');if(eCl){const dr=dashRange();cons
 ]},options:{...bo,plugins:{legend:{display:true,labels:{boxWidth:10,padding:10,font:{size:10}}}},scales:{x:{grid:{display:false},ticks:{color:tc,font:{size:10},maxTicksLimit:15}},y:{grid:{color:gc},ticks:{color:tc,font:{size:10}},title:{display:true,text:'Yangi / Churn',color:tc,font:{size:10}}},y1:{position:'right',grid:{display:false},ticks:{color:'#1746a2',font:{size:10}},title:{display:true,text:'Jami',color:'#1746a2',font:{size:10}}}}}})}
 // Status chart
 
-const eS=document.getElementById('chS');if(eS){const sc2={A:0,D:0,Q:0,P:0,O:0,X:0};S.rows.forEach(r=>{const c=sc(r.status);if(sc2[c]!==undefined)sc2[c]++});new Chart(eS,{type:'doughnut',data:{labels:['Aktiv','Bajarildi','Eski qarz','Muammo','Ortiqcha','Bekor'],datasets:[{data:[sc2.A,sc2.D,sc2.Q,sc2.P,sc2.O,sc2.X],backgroundColor:['#117a52','#1746a2','#a36207','#c42b1c','#6941b8','#999'],borderWidth:0}]},options:{...bo,cutout:'55%',plugins:{legend:{display:true,position:'right',labels:{boxWidth:10,padding:8,font:{size:11}}}}}})}
+// Status chart removed
 
 const e4=document.getElementById('chMM');if(e4){const m={};S.rows.forEach(r=>{const n=r.Manager||'?';m[n]=(m[n]||0)+r._mUSD});const e=Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10);new Chart(e4,{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:co,borderRadius:4}]},options:{...bo,indexAxis:'y',scales:{x:{grid:{color:gc},ticks:{color:tc,font:{size:11},callback:v=>fk(v)}},y:{grid:{display:false},ticks:{color:tc,font:{size:11}}}}}})}
 
