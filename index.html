@@ -467,25 +467,24 @@ allNames.forEach(name=>{
 newClients.sort((a,b)=>b.date-a.date);
 churnClients.sort((a,b)=>b.date-a.date);
 expClients.sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
-return{labels,totals,cpmArr,newPerPt,churnPerPt,addedMRR,lostMRR,newClients,churnClients,expClients,gran,points};
+return{labels,totals,cpmArr,newPerPt,churnPerPt,addedMRR,lostMRR,newClients,churnClients,expClients,gran,points,beforeMRR:before.total,beforeClients:before.active.size};
 }
 function rD(){
 const dr=dashRange();
-const {labels,totals,cpmArr,newPerPt,churnPerPt,addedMRR,lostMRR,newClients,churnClients,expClients}=dr;
+const {labels,totals,cpmArr,newPerPt,churnPerPt,addedMRR,lostMRR,newClients,churnClients,expClients,beforeMRR,beforeClients}=dr;
 const tot=S.rows.length,clients=[...new Set(S.rows.map(r=>r.Client).filter(Boolean))];
 const curMRR=totals[totals.length-1]||0;
-const startMRR=totals[0]||0;
+const startMRR=beforeMRR||0;
 const mrrDelta=curMRR-startMRR;
 const mrrPct=startMRR?Math.round(mrrDelta/startMRR*100):0;
 const totalNew=newClients.length;
 const totalRechurn=newClients.filter(c=>c.isRechurn).length;
 const totalChurn=churnClients.length;
 const curClients=cpmArr[cpmArr.length-1]||0;
-// MRR split: derived from expClients (consistent)
 const mrrFromNew=newClients.reduce((s,c)=>s+c.mrr,0);
 const mrrFromChurn=churnClients.reduce((s,c)=>s+c.mrr,0);
 const mrrExpansion=expClients.reduce((s,c)=>s+c.delta,0);
-const startClients=cpmArr[0]||0;
+const startClients=beforeClients||0;
 const clientDelta=curClients-startClients;
 const mrrFromRechurn=newClients.filter(c=>c.isRechurn).reduce((s,c)=>s+c.mrr,0);
 const mrrFromPureNew=mrrFromNew-mrrFromRechurn;
