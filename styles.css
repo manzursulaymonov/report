@@ -471,6 +471,8 @@ select.flt:focus{outline:none;border-color:var(--accent2);box-shadow:0 0 0 3px r
   .page-title{font-size:18px}
   .toast-container{left:16px;right:16px}
   .toast{max-width:100%}
+  .mrr-breakdown .card-body>div{flex-direction:column}
+  .health-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 }
 @media(max-width:480px){
   .metrics{grid-template-columns:1fr}
